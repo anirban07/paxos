@@ -1,6 +1,7 @@
 package lspaxos
 
 import (
+        "errors"
 	"fmt"
 	"net/rpc"
 )
@@ -118,11 +119,13 @@ func Call(
 	defer client.Close()
 	if err != nil {
 		fmt.Printf("Error on Dial() Server:%s Procedure:%s\n", ServerAddress, ProcedureName)
+		Done <- false
 		return
 	}
 	err = client.Call(ProcedureName, Request, Response)
 	if err != nil {
 		fmt.Printf("Error on Dial() Server:%s Procedure:%s Error: %s\n", ServerAddress, ProcedureName, err)
+		Done <- false
 		return
 	}
 
@@ -132,10 +135,10 @@ func Call(
 type TestRPCHandler struct{}
 
 func (h *TestRPCHandler) Execute(req Ballot, res *Ballot) (err error) {
-	//if req.Number != 69 {
-	//	err = errors.New("Wrong key!!")
-	//	return
-	//}
+	if req.Number == 5 {
+		err = errors.New("Bad key!!")
+		return
+	}
 	fmt.Printf("In Execute, %+v\n", req)
 	res.Leader = req.Number
 	return

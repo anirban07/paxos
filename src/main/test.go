@@ -22,6 +22,11 @@ func TestRpcClient(ServerPort string) {
 	
 	for i := 0; i < 5; i++ {
 	    resp := <- ch
+	    if resp == false {
+	       fmt.Printf("Response %d failed...\n", i)
+	       continue
+	    }
+
 	    fmt.Printf("Response %d: %+v\n", i, resp)
 	}
 }
