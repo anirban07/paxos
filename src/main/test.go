@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"lspaxos"
-	"net/rpc"
 )
 
 func main() {
@@ -15,10 +14,7 @@ func TestRpcClient(ServerPort string) {
 	var request = &lspaxos.Ballot{Number: 69}
 	var response = new(lspaxos.Ballot)
 
-	var client, _ = rpc.Dial("tcp", addr)
-	defer client.Close()
-	err := client.Call("TestRPCHandler.Execute", request, response)
-	fmt.Println(err)
+	lspaxos.Call(addr, "TestRPCHandler.Execute", request, response)
 	fmt.Println("~~~")
 	fmt.Println(response)
 }

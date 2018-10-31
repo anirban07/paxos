@@ -1,6 +1,10 @@
 package lspaxos
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"net/rpc"
+)
 
 type LockOp string
 type Err string
@@ -102,6 +106,25 @@ type ScoutResponse struct {
 	Ballot Ballot
 
 	AcceptedValues map[int]Command
+}
+
+func Call(
+	ServerAddress string,
+	ProcedureName string,
+	Request interface{},
+	Response interface{},
+) bool {
+	var client, err = rpc.Dial("tcp", ServerAddress)
+	defer client.Close()
+	if err != nil {
+		fmt.Printf("Error on Dial() Server:%s Procedure:%s\n", ServerAddress, ProcedureName)
+		return false
+	}
+	err = client.Call(ProcedureName, Request, Response)
+	if err != nil {
+		fmt.Printf("Error on Dial() Server:%s Procedure:%s Error: %s\n", ServerAddress, ProcedureName, err)
+	}
+	return true
 }
 
 type TestRPCHandler struct{}
