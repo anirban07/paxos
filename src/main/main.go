@@ -20,11 +20,12 @@ import (
 // }
 
 func main() {
-	TestRpcServer(os.Args[1])
+        lspaxos.StartAcceptorServer("Alpha", os.Args[1])
+	//TestRpcServer(os.Args[1])
 }
 
 func TestRpcServer(Port string) {
-	rpc.Register(&lspaxos.TestRPCHandler{})
+	rpc.Register(&lspaxos.AcceptorServer{})
 	fmt.Println("Listening on " + Port)
 	listener, _ := net.Listen("tcp", ":"+Port)
 	defer listener.Close()
