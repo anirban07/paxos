@@ -8,17 +8,6 @@ import (
 	"os"
 )
 
-// type TestRPCHandler struct {
-// }
-
-// type TestRequest struct {
-// 	Name string
-// }
-
-// type TestResponse struct {
-// 	Message string
-// }
-
 func main() {
 	TestRpcServer(os.Args[1])
 }
@@ -31,12 +20,3 @@ func TestRpcServer(Port string) {
 
 	rpc.Accept(listener)
 }
-
-// func (h *TestRPCHandler) Execute(req TestRequest, res *TestResponse) (err error) {
-// 	if req.Name != "SecretKey" {
-// 		err = errors.New("Wrong key!!")
-// 		return
-// 	}
-// 	res.Message = "SecretValue"
-// 	return
-// }
