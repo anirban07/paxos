@@ -9,31 +9,8 @@ func main() {
 	TestAcceptor("1234")
 }
 
-func TestRpcClient(ServerPort string) {
-	var addr = "128.208.1.139:" + ServerPort
-	ch := make(chan interface{}, 5)
-	requestNumbers := [5]int{1, 2, 3, 4, 5}
-
-	for i := 0; i < 5; i++ {
-		ballot := lspaxos.Ballot{Number: requestNumbers[i]}
-		request := &lspaxos.ScoutRequest{Ballot: ballot}
-		response := new(lspaxos.ScoutResponse)
-		go lspaxos.Call(addr, "AcceptorServer.ExecutePropose", request, response, ch)
-	}
-
-	for i := 0; i < 5; i++ {
-		resp := <-ch
-		if resp == false {
-			fmt.Printf("Response %d failed...\n", i)
-			continue
-		}
-
-		//fmt.Printf("Response %d: %+v\n", i, resp)
-	}
-}
-
 func TestAcceptor(ServerPort string) {
-	var addr = "128.208.1.139:" + ServerPort
+	var addr = "localhost:" + ServerPort
 	ch := make(chan interface{}, 5)
 	requestNumbers := [5]int{1, 1, 1, 1, 1}
 
@@ -42,7 +19,7 @@ func TestAcceptor(ServerPort string) {
 		ballot := lspaxos.Ballot{Number: requestNumbers[i], Leader: i + 1}
 		request := &lspaxos.ScoutRequest{Ballot: ballot}
 		response := new(lspaxos.ScoutResponse)
-		go lspaxos.Call(addr, "AcceptorServer.ExecutePropose", request, response, ch)
+		go lspaxos.Call(addr, "Acceptor.ExecutePropose", request, response, ch)
 	}
 
 	for i := 0; i < 5; i++ {
@@ -58,10 +35,10 @@ func TestAcceptor(ServerPort string) {
 
 	// Send commander request
 	ballot := lspaxos.Ballot{Number: 1, Leader: 5}
-	command := lspaxos.Command{LockName: "Theta", LockOp: lspaxos.Unlock, MsgId: 1, ClientId: 5}
+	command := lspaxos.Command{LockName: "Theta", LockOp: lspaxos.Unlock, MsgID: 1, ClientID: 5}
 	request := &lspaxos.CommanderRequest{Ballot: ballot, Slot: 1, Command: command}
 	response := new(lspaxos.CommanderResponse)
-	go lspaxos.Call(addr, "AcceptorServer.ExecuteAccept", request, response, ch)
+	go lspaxos.Call(addr, "Acceptor.ExecuteAccept", request, response, ch)
 
 	resp := <-ch
 	fmt.Printf("Response: %+v\n", resp)

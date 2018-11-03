@@ -1,8 +1,7 @@
 package lspaxos
 
 import (
-	"errors"
-	"fmt"
+	"log"
 	"net/rpc"
 )
 
@@ -28,10 +27,10 @@ type Command struct {
 	LockOp LockOp
 
 	// Message Id
-	MsgId int
+	MsgID int
 
 	// Client Id
-	ClientId int64
+	ClientID int64
 }
 
 // Number.Leader, Number takes precedence
@@ -41,13 +40,11 @@ type Ballot struct {
 }
 
 // Compares two ballot numbers
-// TODO: Anir, is there a better way to do this?
-func CompareBallot(b1 Ballot, b2 Ballot) int {
-	if b1.Number != b2.Number {
-		return b1.Number - b2.Number
-	} else {
-		return b1.Leader - b2.Leader
+func (this Ballot) Compare(other Ballot) int {
+	if this.Number == other.Number {
+		return this.Leader - other.Leader
 	}
+	return this.Number - other.Number
 }
 
 // Client request response from the replica
@@ -118,6 +115,12 @@ type ScoutResponse struct {
 	AcceptedValues map[int]Command
 }
 
+// Call is a wrapper function for creating a connection to a remote
+// server and making an RPC.
+// It is a blocking operation, and the caller should use a goroutine
+// to call it.
+// It sends the response in the Done channel on success, or false on
+// failure
 func Call(
 	ServerAddress string,
 	ProcedureName string,
@@ -125,31 +128,28 @@ func Call(
 	Response interface{},
 	Done chan interface{},
 ) {
-	var client, err = rpc.Dial("tcp", ServerAddress)
+	client, err := rpc.Dial("tcp", ServerAddress)
 	defer client.Close()
 	if err != nil {
-		fmt.Printf("Error on Dial() Server:%s Procedure:%s\n", ServerAddress, ProcedureName)
+		log.Printf(
+			"Error on Dial() Server:%s Procedure:%s\n",
+			ServerAddress,
+			ProcedureName,
+		)
 		Done <- false
 		return
 	}
-	ProcedureCall := client.Go(ProcedureName, Request, Response, Done)
-	if ProcedureCall.Error != nil {
-		fmt.Printf("Error on Dial() Server:%s Procedure:%s Error: %s\n", ServerAddress, ProcedureName, err)
+	err = client.Call(ProcedureName, Request, Response)
+	if err != nil {
+		log.Printf(
+			"Error on Call() Server:%s Procedure:%s Error: %s\n",
+			ServerAddress,
+			ProcedureName,
+			err,
+		)
 		Done <- false
 		return
 	}
 
 	Done <- Response
-}
-
-type TestRPCHandler struct{}
-
-func (h *TestRPCHandler) Execute(req Ballot, res *Ballot) (err error) {
-	if req.Number == 5 {
-		err = errors.New("Bad key!!")
-		return
-	}
-	fmt.Printf("In Execute, %+v\n", req)
-	res.Leader = req.Number
-	return
 }
