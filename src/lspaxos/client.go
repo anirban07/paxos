@@ -26,30 +26,38 @@ type Client struct {
 
 // Starts a client that issues requests in the order
 // of the given specification of lock/unlock operations
-func (c *Client) StartClient(Spec []string) {
-	c.MsgID = 1
-	c.TimeoutMillis = 0
+func StartClient(
+	ClientID int64,
+	Replicas []string,
+	Spec []string,
+) (err error) {
+	thisClient := Client{
+		ClientID:      ClientID,
+		MsgID:         1,
+		Replicas:      Replicas,
+		TimeoutMillis: 0,
+	}
 	done := make(chan interface{}, len(Spec))
 	for _, line := range Spec {
 		parts := strings.Fields(line)
 		command := Command{LockName: parts[1],
 			LockOp:   LockOp(parts[0]),
-			MsgID:    c.MsgID,
-			ClientID: c.ClientID}
+			MsgID:    thisClient.MsgID,
+			ClientID: thisClient.ClientID}
 
 		// Send the command to each replica
-		c.SendCommand(command, done)
+		thisClient.SendCommand(command, done)
 
 		// Grab responses, break on the first valid one.
 		for {
 			response := <-done
 			if response == false {
 				log.Println("Error occurred in the RPC, break")
-				panic(errors.New("Failed to call replica, invariant broken"))
+				return errors.New("Failed to call replica, invariant broken")
 			}
 
 			var resp = response.(ClientResponse)
-			if resp.MsgID != c.MsgID {
+			if resp.MsgID != thisClient.MsgID {
 				// Stale message
 				continue
 			}
@@ -58,34 +66,35 @@ func (c *Client) StartClient(Spec []string) {
 				// Add constant amount to timeout
 				// Wait, then resend commands
 				// Have to increment the message id to deal with stale responses
-				c.TimeoutMillis += 500
-				time.Sleep(time.Duration(c.TimeoutMillis) * time.Millisecond)
-				c.MsgID++
-				c.SendCommand(command, done)
+				thisClient.TimeoutMillis += 500
+				time.Sleep(time.Duration(thisClient.TimeoutMillis) * time.Millisecond)
+				thisClient.MsgID++
+				thisClient.SendCommand(command, done)
 				continue
 			} else if resp.Err == OK {
-				log.Printf("Client %d successfully executed %+v\n", c.ClientID, command)
+				log.Printf("Client %d successfully executed %+v\n", thisClient.ClientID, command)
 			}
 
 			// Either way, we're here if the lock didn't exist
 			// or if the command succeeded. Need to exit and then decrease the
 			// timeout by a factor  of 2
-			c.TimeoutMillis /= 2
+			thisClient.TimeoutMillis /= 2
 			break
 		}
 
 		// Start the next message
-		c.MsgID++
+		thisClient.MsgID++
 	}
 	close(done)
+	return nil
 }
 
 // Send a command to every replica asynchronously
-func (c *Client) SendCommand(Command Command, Done chan interface{}) {
-	for _, server := range c.Replicas {
+func (thisClient *Client) SendCommand(Command Command, Done chan interface{}) {
+	for _, server := range thisClient.Replicas {
 		request := ClientRequest{Command: Command}
 		response := new(ClientResponse)
-		go Call(server, "ReplicaServer.ExecuteRequest", request, response, Done)
+		go Call(server, "Replica.ExecuteRequest", request, response, Done)
 	}
 }
 

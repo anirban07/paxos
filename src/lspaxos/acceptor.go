@@ -12,7 +12,7 @@ import (
 // - Keeps track of a map of previously accepted commands (if any)
 type Acceptor struct {
 	// Unique identifier of the acceptor
-	AcceptorID int
+	AcceptorID int64
 
 	// Highest ballot number promised by this acceptor
 	Ballot Ballot
@@ -62,7 +62,7 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 // Helper to spawn an instance of an Acceptor
 // Example usage: go StartAcceptorServer("Alpha", 1234)
 // Returns an error if unable to set up a listening port
-func StartAcceptorServer(AcceptorID int, Port string) (err error) {
+func StartAcceptor(AcceptorID int64, Port string) (err error) {
 	rpc.Register(&Acceptor{
 		AcceptorID:     AcceptorID,
 		Ballot:         Ballot{-1, -1},
