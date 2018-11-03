@@ -1,7 +1,7 @@
 package lspaxos
 
 import (
-        "errors"
+    "errors"
 	"fmt"
 	"net/rpc"
 )
@@ -43,11 +43,11 @@ type Ballot struct {
 // Compares two ballot numbers
 // TODO: Anir, is there a better way to do this?
 func CompareBallot(b1 Ballot, b2 Ballot) int {
-     if b1.Number != b2.Number {
-     	return b1.Number - b2.Number;
-     } else {
+    if b1.Number != b2.Number {
+    	return b1.Number - b2.Number;
+    } else {
         return b1.Leader - b2.Leader;
-     }
+    }
 }
 
 // Client request response from the replica
