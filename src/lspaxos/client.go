@@ -11,11 +11,11 @@ import (
 
 type Client struct {
 	// Unique identifier of the client
-	ClientId int64
+	ClientID int64
 
 	// Initial request sequence number / message id number
 	// Should start at 0
-	MsgId int
+	MsgID int
 
 	// Addresses of the replica servers
 	Replicas []string
@@ -27,15 +27,15 @@ type Client struct {
 // Starts a client that issues requests in the order
 // of the given specification of lock/unlock operations
 func (c *Client) StartClient(Spec []string) {
-	c.MsgId = 1
+	c.MsgID = 1
 	c.TimeoutMillis = 0
 	done := make(chan interface{}, len(Spec))
 	for _, line := range Spec {
 		parts := strings.Fields(line)
 		command := Command{LockName: parts[1],
 			LockOp:   LockOp(parts[0]),
-			MsgId:    c.MsgId,
-			ClientId: c.ClientId}
+			MsgID:    c.MsgID,
+			ClientID: c.ClientID}
 
 		// Send the command to each replica
 		c.SendCommand(command, done)
@@ -49,7 +49,7 @@ func (c *Client) StartClient(Spec []string) {
 			}
 
 			var resp = response.(ClientResponse)
-			if resp.MsgId != c.MsgId {
+			if resp.MsgID != c.MsgID {
 				// Stale message
 				continue
 			}
@@ -60,11 +60,11 @@ func (c *Client) StartClient(Spec []string) {
 				// Have to increment the message id to deal with stale responses
 				c.TimeoutMillis += 500
 				time.Sleep(time.Duration(c.TimeoutMillis) * time.Millisecond)
-				c.MsgId++
+				c.MsgID++
 				c.SendCommand(command, done)
 				continue
 			} else if resp.Err == OK {
-				log.Printf("Client %d successfully executed %+v\n", c.ClientId, command)
+				log.Printf("Client %d successfully executed %+v\n", c.ClientID, command)
 			}
 
 			// Either way, we're here if the lock didn't exist
@@ -75,7 +75,7 @@ func (c *Client) StartClient(Spec []string) {
 		}
 
 		// Start the next message
-		c.MsgId++
+		c.MsgID++
 	}
 	close(done)
 }

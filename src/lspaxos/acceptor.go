@@ -2,7 +2,7 @@ package lspaxos
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"net"
 	"net/rpc"
 )
@@ -10,7 +10,10 @@ import (
 // Defines an the Acceptor state
 // - Keeps track of a ballot number (highest seen)
 // - Keeps track of a map of previously accepted commands (if any)
-type AcceptorServer struct {
+type Acceptor struct {
+	// Unique identifier of the acceptor
+	AcceptorID int
+
 	// Highest ballot number promised by this acceptor
 	Ballot Ballot
 
@@ -20,44 +23,60 @@ type AcceptorServer struct {
 
 // Handler for Scout RPC's
 // Checks if ballot number is higher and updates if necessary
-func (h *AcceptorServer) ExecutePropose(req ScoutRequest, res *ScoutResponse) (err error) {
-	if CompareBallot(req.Ballot, h.Ballot) > 0 {
-		h.Ballot = req.Ballot
+func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutResponse) (err error) {
+	if req.Ballot.Compare(thisAcceptor.Ballot) > 0 {
+		thisAcceptor.Ballot = req.Ballot
 		// For debug purposes, TODO: Anir, is there a better way to log this?
-		fmt.Printf("Updated ballot %+v, accepted: %+v\n", h.Ballot, h.AcceptedValues)
+		log.Printf(
+			"Acceptor %d updated ballot %+v, accepted: %+v\n",
+			thisAcceptor.AcceptorID,
+			thisAcceptor.Ballot,
+			thisAcceptor.AcceptedValues,
+		)
 	}
 
-	res.Ballot = h.Ballot
-	res.AcceptedValues = h.AcceptedValues
-	return
+	res.Ballot = thisAcceptor.Ballot
+	res.AcceptedValues = thisAcceptor.AcceptedValues
+	return nil
 }
 
 // Handler for Commander RPC's
 // Only accepts the command sent by the commander if the ballot of the commander is equivalent
 // to the ballot promised by the acceptor (i.e. The Commander is the leader)
-func (h *AcceptorServer) ExecuteAccept(req CommanderRequest, res *CommanderResponse) (err error) {
-	if CompareBallot(req.Ballot, h.Ballot) == 0 {
-		h.AcceptedValues[req.Slot] = req.Command
+func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *CommanderResponse) (err error) {
+	if req.Ballot.Compare(thisAcceptor.Ballot) == 0 {
+		thisAcceptor.AcceptedValues[req.Slot] = req.Command
+		log.Printf(
+			"Acceptor %d accepted ballot:%+v slot:%d command:%+v \n",
+			thisAcceptor.AcceptorID,
+			req.Ballot,
+			req.Slot,
+			req.Command,
+		)
 	}
 
-	res.Ballot = h.Ballot
-	return
+	res.Ballot = thisAcceptor.Ballot
+	return nil
 }
 
 // Helper to spawn an instance of an Acceptor
 // Example usage: go StartAcceptorServer("Alpha", 1234)
 // Returns an error if unable to set up a listening port
-func StartAcceptorServer(Name string, Port string) (err error) {
-	rpc.Register(&AcceptorServer{AcceptedValues: make(map[int]Command)})
-	fmt.Printf("Acceptor server %s listening on port %s\n", Name, Port)
+func StartAcceptorServer(AcceptorID int, Port string) (err error) {
+	rpc.Register(&Acceptor{
+		AcceptorID:     AcceptorID,
+		Ballot:         Ballot{-1, -1},
+		AcceptedValues: make(map[int]Command),
+	})
+	log.Printf("Acceptor %d listening on port %s\n", AcceptorID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
 	defer listener.Close()
 
 	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on " + Name)
-		return
+		err = errors.New("Failed to set up listening port " + Port + " on " + string(AcceptorID))
+		return err
 	}
 
 	rpc.Accept(listener)
-	return
+	return nil
 }
