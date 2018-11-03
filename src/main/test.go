@@ -3,35 +3,66 @@ package main
 import (
 	"fmt"
 	"lspaxos"
-	"net/rpc"
 )
 
 func main() {
-	TestRpcClient("1234")
+	TestAcceptor("1234")
 }
 
 func TestRpcClient(ServerPort string) {
-	var addr = "localhost:" + ServerPort
+	var addr = "128.208.1.139:" + ServerPort
+	ch := make(chan interface{}, 5)
+	requestNumbers := [5]int{1, 2, 3, 4, 5}
 
-	done := make(chan *rpc.Call, 10)
-	reqVals := []int{2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
-	reqValToRes := make(map[lspaxos.Ballot]*lspaxos.Ballot)
-
-	for _, reqVal := range reqVals {
-		req := lspaxos.Ballot{Number: reqVal, Leader: 0}
-		res := new(lspaxos.Ballot)
-		reqValToRes[req] = res
+	for i := 0; i < 5; i++ {
+		ballot := lspaxos.Ballot{Number: requestNumbers[i]}
+		request := &lspaxos.ScoutRequest{Ballot: ballot}
+		response := new(lspaxos.ScoutResponse)
+		go lspaxos.Call(addr, "AcceptorServer.ExecutePropose", request, response, ch)
 	}
 
-	for req, res := range reqValToRes {
-		go lspaxos.Call(addr, "TestRPCHandler.Execute", req, res, done)
+	for i := 0; i < 5; i++ {
+		resp := <-ch
+		if resp == false {
+			fmt.Printf("Response %d failed...\n", i)
+			continue
+		}
+
+		//fmt.Printf("Response %d: %+v\n", i, resp)
+	}
+}
+
+func TestAcceptor(ServerPort string) {
+	var addr = "128.208.1.139:" + ServerPort
+	ch := make(chan interface{}, 5)
+	requestNumbers := [5]int{1, 1, 1, 1, 1}
+
+	// Send contending ballots from scouts 1-5
+	for i := 0; i < 5; i++ {
+		ballot := lspaxos.Ballot{Number: requestNumbers[i], Leader: i + 1}
+		request := &lspaxos.ScoutRequest{Ballot: ballot}
+		response := new(lspaxos.ScoutResponse)
+		go lspaxos.Call(addr, "AcceptorServer.ExecutePropose", request, response, ch)
 	}
 
-	// time.Sleep(6 * time.Second)
-	for range reqVals {
-		resCall := <-done
-		// req, _ := resCall.Args.(lspaxos.Ballot)
-		// res := reqValToRes[req.Number]
-		fmt.Println("Got reply:", resCall.Reply, "error: ", resCall.Error)
+	for i := 0; i < 5; i++ {
+		resp := <-ch
+		if resp == false {
+			fmt.Printf("Response %d failed...\n", i)
+			continue
+		}
+
+		// The map should be empty for all responses
+		fmt.Printf("Response %d: %+v\n", i, resp)
 	}
+
+	// Send commander request
+	ballot := lspaxos.Ballot{Number: 1, Leader: 5}
+	command := lspaxos.Command{LockName: "Theta", LockOp: lspaxos.Unlock, MsgId: 1, ClientId: 5}
+	request := &lspaxos.CommanderRequest{Ballot: ballot, Slot: 1, Command: command}
+	response := new(lspaxos.CommanderResponse)
+	go lspaxos.Call(addr, "AcceptorServer.ExecuteAccept", request, response, ch)
+
+	resp := <-ch
+	fmt.Printf("Response: %+v\n", resp)
 }

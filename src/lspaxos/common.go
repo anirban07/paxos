@@ -1,6 +1,7 @@
 package lspaxos
 
 import (
+	"errors"
 	"fmt"
 	"net/rpc"
 )
@@ -37,6 +38,16 @@ type Command struct {
 type Ballot struct {
 	Number int
 	Leader int
+}
+
+// Compares two ballot numbers
+// TODO: Anir, is there a better way to do this?
+func CompareBallot(b1 Ballot, b2 Ballot) int {
+	if b1.Number != b2.Number {
+		return b1.Number - b2.Number
+	} else {
+		return b1.Leader - b2.Leader
+	}
 }
 
 // Client request response from the replica
@@ -112,32 +123,33 @@ func Call(
 	ProcedureName string,
 	Request interface{},
 	Response interface{},
-	Done chan *rpc.Call,
-) *rpc.Call {
+	Done chan interface{},
+) {
 	var client, err = rpc.Dial("tcp", ServerAddress)
 	defer client.Close()
 	if err != nil {
 		fmt.Printf("Error on Dial() Server:%s Procedure:%s\n", ServerAddress, ProcedureName)
-		// TODO: Do something better that simple return. Maybe write the error to the channel?
-		return nil
+		Done <- false
+		return
 	}
 	ProcedureCall := client.Go(ProcedureName, Request, Response, Done)
 	if ProcedureCall.Error != nil {
 		fmt.Printf("Error on Dial() Server:%s Procedure:%s Error: %s\n", ServerAddress, ProcedureName, err)
-		// TODO: Do something better that simple return. Maybe write the error to the channel?
-		return nil
+		Done <- false
+		return
 	}
-	return ProcedureCall
+
+	Done <- Response
 }
 
 type TestRPCHandler struct{}
 
 func (h *TestRPCHandler) Execute(req Ballot, res *Ballot) (err error) {
-	// if req.Number != 69 {
-	// 	err = errors.New("Wrong key!!")
-	// 	return
-	// }
-	fmt.Printf("Got request %v\n", req)
+	if req.Number == 5 {
+		err = errors.New("Bad key!!")
+		return
+	}
+	fmt.Printf("In Execute, %+v\n", req)
 	res.Leader = req.Number
 	return
 }
