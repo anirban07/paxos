@@ -59,6 +59,9 @@ type ClientRequest struct {
 type ClientResponse struct {
 	// Error string
 	Err Err
+
+	// Used to verify on the client side
+	MsgId int
 }
 
 // Replica-Leader request/response

@@ -20,8 +20,16 @@ import (
 // }
 
 func main() {
-        lspaxos.StartAcceptorServer("Alpha", os.Args[1])
+    lspaxos.StartAcceptorServer("Alpha", os.Args[1])
 	//TestRpcServer(os.Args[1])
+	/*var commands = lspaxos.ReadSpec("../specs/test_spec.txt")
+	replicas := [1]string {"Delta"}
+	for _, command := range commands {
+		fmt.Println(command)
+	}
+
+	var client = lspaxos.Client{ClientId: 2048, Replicas: replicas[:]}
+	client.StartClient(commands)*/
 }
 
 func TestRpcServer(Port string) {
