@@ -33,6 +33,10 @@ type Command struct {
 	ClientID int64
 }
 
+func (this Command) Equals(other Command) bool {
+	return this.ClientID == other.ClientID && this.MsgID == other.MsgID
+}
+
 // Number.Leader, Number takes precedence
 type Ballot struct {
 	Number int
