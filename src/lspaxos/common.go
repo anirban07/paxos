@@ -9,9 +9,9 @@ type LockOp string
 type Err string
 
 const (
-	OK             = "OK"
-	ErrInvalidLock = "No such lock to unlock"
-	ErrLockHeld    = "Lock held by someone else"
+	OK               = "OK"
+	ErrInvalidUnlock = "Attempting to unlock unheld lock"
+	ErrLockHeld      = "Lock held by someone else"
 )
 
 const (
@@ -31,6 +31,10 @@ type Command struct {
 
 	// Client Id
 	ClientID int64
+}
+
+func (this Command) Equals(other Command) bool {
+	return this.ClientID == other.ClientID && this.MsgID == other.MsgID
 }
 
 // Number.Leader, Number takes precedence

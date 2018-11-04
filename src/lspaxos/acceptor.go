@@ -12,31 +12,31 @@ import (
 // - Keeps track of a map of previously accepted commands (if any)
 type Acceptor struct {
 	// Unique identifier of the acceptor
-	AcceptorID int64
+	acceptorID int64
 
 	// Highest ballot number promised by this acceptor
-	Ballot Ballot
+	ballot Ballot
 
 	// Map to store slot number with commands
-	AcceptedValues map[int]Command
+	acceptedValues map[int]Command
 }
 
 // Handler for Scout RPC's
 // Checks if ballot number is higher and updates if necessary
 func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutResponse) (err error) {
-	if req.Ballot.Compare(thisAcceptor.Ballot) > 0 {
-		thisAcceptor.Ballot = req.Ballot
+	if req.Ballot.Compare(thisAcceptor.ballot) > 0 {
+		thisAcceptor.ballot = req.Ballot
 		log.Printf(
 			"Acceptor %d updated ballot %+v, accepted: %+v\n",
-			thisAcceptor.AcceptorID,
-			thisAcceptor.Ballot,
-			thisAcceptor.AcceptedValues,
+			thisAcceptor.acceptorID,
+			thisAcceptor.ballot,
+			thisAcceptor.acceptedValues,
 		)
 	}
 
-	res.Ballot = thisAcceptor.Ballot
-	res.AcceptedValues = thisAcceptor.AcceptedValues
-	res.AcceptorID = thisAcceptor.AcceptorID
+	res.Ballot = thisAcceptor.ballot
+	res.AcceptedValues = thisAcceptor.acceptedValues
+	res.AcceptorID = thisAcceptor.acceptorID
 	return nil
 }
 
@@ -44,19 +44,19 @@ func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutRespons
 // Only accepts the command sent by the commander if the ballot of the commander is equivalent
 // to the ballot promised by the acceptor (i.e. The Commander is the leader)
 func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *CommanderResponse) (err error) {
-	if req.Ballot.Compare(thisAcceptor.Ballot) == 0 {
-		thisAcceptor.AcceptedValues[req.Slot] = req.Command
+	if req.Ballot.Compare(thisAcceptor.ballot) == 0 {
+		thisAcceptor.acceptedValues[req.Slot] = req.Command
 		log.Printf(
 			"Acceptor %d accepted ballot:%+v slot:%d command:%+v \n",
-			thisAcceptor.AcceptorID,
+			thisAcceptor.acceptorID,
 			req.Ballot,
 			req.Slot,
 			req.Command,
 		)
 	}
 
-	res.Ballot = thisAcceptor.Ballot
-	res.AcceptorID = thisAcceptor.AcceptorID
+	res.Ballot = thisAcceptor.ballot
+	res.AcceptorID = thisAcceptor.acceptorID
 	return nil
 }
 
@@ -65,9 +65,9 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 // Returns an error if unable to set up a listening port
 func StartAcceptor(AcceptorID int64, Port string) (err error) {
 	rpc.Register(&Acceptor{
-		AcceptorID:     AcceptorID,
-		Ballot:         Ballot{-1, -1},
-		AcceptedValues: make(map[int]Command),
+		acceptorID:     AcceptorID,
+		ballot:         Ballot{-1, -1},
+		acceptedValues: make(map[int]Command),
 	})
 	log.Printf("Acceptor %d listening on port %s\n", AcceptorID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
