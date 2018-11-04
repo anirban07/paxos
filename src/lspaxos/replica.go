@@ -17,64 +17,64 @@ type Replica struct {
 	mu sync.Mutex
 
 	// Channel ReplicaResponse from Leader
-	ReplicaResponses chan interface{}
+	replicaResponses chan interface{}
 
 	// Unique identifier of the replica
-	ReplicaID int64
+	replicaID int64
 
 	// Map from lock name to client holding it
-	LockMap map[string]int64
+	lockMap map[string]int64
 
 	// The index of the next slot in which the replica
 	// has not yet proposed any command, initially 1
-	SlotIn int
+	slotIn int
 
 	// The index of the next slot for which it needs to learn a
 	// decision before it can update its copy of the application state
-	SlotOut int
+	slotOut int
 
 	// Condition variable for new item added to Requests
-	NewRequest sync.Cond
+	newRequest sync.Cond
 
 	// Client requests not yet proposed or decided
-	Requests []ClientRequest
+	requests []ClientRequest
 
 	// Proposals that are currently outstanding
-	Proposals map[int]ClientRequest
+	proposals map[int]ClientRequest
 
 	// Proposals that are known to have been decided
-	Decisions map[int]ClientRequest
+	decisions map[int]ClientRequest
 
 	// Leaders
-	Leaders []string
+	leaders []string
 }
 
 func (thisReplica *Replica) propose() {
 	for {
 		thisReplica.mu.Lock()
-		for len(thisReplica.Requests) == 0 {
-			thisReplica.NewRequest.Wait()
+		for len(thisReplica.requests) == 0 {
+			thisReplica.newRequest.Wait()
 		}
 		// Propose values. Should empty out the Requests
-		for _, clientRequest := range thisReplica.Requests {
+		for _, clientRequest := range thisReplica.requests {
 			request := ReplicaRequest{
 				Command: clientRequest.Command,
-				Slot:    thisReplica.SlotIn,
+				Slot:    thisReplica.slotIn,
 			}
-			for _, leader := range thisReplica.Leaders {
+			for _, leader := range thisReplica.leaders {
 				response := new(ReplicaResponse)
 				go Call(
 					leader,
 					"Leader.ExecutePropose",
 					request,
 					response,
-					thisReplica.ReplicaResponses,
+					thisReplica.replicaResponses,
 				)
 			}
-			thisReplica.Proposals[thisReplica.SlotIn] = clientRequest
-			thisReplica.SlotIn++
+			thisReplica.proposals[thisReplica.slotIn] = clientRequest
+			thisReplica.slotIn++
 		}
-		thisReplica.Requests = nil
+		thisReplica.requests = nil
 		thisReplica.mu.Unlock()
 	}
 }
@@ -82,17 +82,17 @@ func (thisReplica *Replica) propose() {
 func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 	thisReplica := &Replica{
 		mu:               sync.Mutex{},
-		ReplicaResponses: make(chan interface{}, ReplicaResponsesChannelSize),
-		ReplicaID:        ReplicaID,
-		LockMap:          make(map[string]int64),
-		SlotIn:           1,
-		SlotOut:          1,
-		Requests:         make([]ClientRequest, 8),
-		Proposals:        make(map[int]ClientRequest),
-		Decisions:        make(map[int]ClientRequest),
-		Leaders:          Leaders,
+		replicaResponses: make(chan interface{}, ReplicaResponsesChannelSize),
+		replicaID:        ReplicaID,
+		lockMap:          make(map[string]int64),
+		slotIn:           1,
+		slotOut:          1,
+		requests:         make([]ClientRequest, 8),
+		proposals:        make(map[int]ClientRequest),
+		decisions:        make(map[int]ClientRequest),
+		leaders:          Leaders,
 	}
-	thisReplica.NewRequest = sync.Cond{L: &thisReplica.mu}
+	thisReplica.newRequest = sync.Cond{L: &thisReplica.mu}
 	rpc.Register(thisReplica)
 	log.Printf("Replica %d listening on port %s\n", ReplicaID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
@@ -110,12 +110,11 @@ func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientResponse) (err error) {
 	// TODO: Check for duplicate req in Requests, Proposals, Decisions
 	thisReplica.mu.Lock()
-	thisReplica.Requests = append(thisReplica.Requests, req)
+	thisReplica.requests = append(thisReplica.requests, req)
 	thisReplica.mu.Unlock()
-	thisReplica.NewRequest.Signal()
+	thisReplica.newRequest.Signal()
 
 	for {
 
 	}
-	return nil
 }

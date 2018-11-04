@@ -11,17 +11,17 @@ import (
 
 type Client struct {
 	// Unique identifier of the client
-	ClientID int64
+	clientID int64
 
 	// Initial request sequence number / message id number
 	// Should start at 0
-	MsgID int
+	msgID int
 
 	// Addresses of the replica servers
-	Replicas []string
+	replicas []string
 
 	// Current time out
-	TimeoutMillis int
+	timeoutMillis int
 }
 
 // Starts a client that issues requests in the order
@@ -32,18 +32,18 @@ func StartClient(
 	Spec []string,
 ) (err error) {
 	thisClient := Client{
-		ClientID:      ClientID,
-		MsgID:         1,
-		Replicas:      Replicas,
-		TimeoutMillis: 0,
+		clientID:      ClientID,
+		msgID:         1,
+		replicas:      Replicas,
+		timeoutMillis: 0,
 	}
 	done := make(chan interface{}, len(Spec))
 	for _, line := range Spec {
 		parts := strings.Fields(line)
 		command := Command{LockName: parts[1],
 			LockOp:   LockOp(parts[0]),
-			MsgID:    thisClient.MsgID,
-			ClientID: thisClient.ClientID}
+			MsgID:    thisClient.msgID,
+			ClientID: thisClient.clientID}
 
 		// Send the command to each replica
 		thisClient.SendCommand(command, done)
@@ -57,7 +57,7 @@ func StartClient(
 			}
 
 			var resp = response.(ClientResponse)
-			if resp.MsgID != thisClient.MsgID {
+			if resp.MsgID != thisClient.msgID {
 				// Stale message
 				continue
 			}
@@ -66,24 +66,24 @@ func StartClient(
 				// Add constant amount to timeout
 				// Wait, then resend commands
 				// Have to increment the message id to deal with stale responses
-				thisClient.TimeoutMillis += 500
-				time.Sleep(time.Duration(thisClient.TimeoutMillis) * time.Millisecond)
-				thisClient.MsgID++
+				thisClient.timeoutMillis += 500
+				time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
+				thisClient.msgID++
 				thisClient.SendCommand(command, done)
 				continue
 			} else if resp.Err == OK {
-				log.Printf("Client %d successfully executed %+v\n", thisClient.ClientID, command)
+				log.Printf("Client %d successfully executed %+v\n", thisClient.clientID, command)
 			}
 
 			// Either way, we're here if the lock didn't exist
 			// or if the command succeeded. Need to exit and then decrease the
 			// timeout by a factor  of 2
-			thisClient.TimeoutMillis /= 2
+			thisClient.timeoutMillis /= 2
 			break
 		}
 
 		// Start the next message
-		thisClient.MsgID++
+		thisClient.msgID++
 	}
 	close(done)
 	return nil
@@ -91,7 +91,7 @@ func StartClient(
 
 // Send a command to every replica asynchronously
 func (thisClient *Client) SendCommand(Command Command, Done chan interface{}) {
-	for _, server := range thisClient.Replicas {
+	for _, server := range thisClient.replicas {
 		request := ClientRequest{Command: Command}
 		response := new(ClientResponse)
 		go Call(server, "Replica.ExecuteRequest", request, response, Done)
