@@ -101,6 +101,8 @@ type CommanderRequest struct {
 // Response received by the Commander from the Acceptor
 type CommanderResponse struct {
 	Ballot Ballot
+
+	AcceptorID int64
 }
 
 // Scout to Acceptor
@@ -116,6 +118,8 @@ type ScoutResponse struct {
 	Ballot Ballot
 
 	AcceptedValues map[int]Command
+
+	AcceptorID int64
 }
 
 // Call is a wrapper function for creating a connection to a remote

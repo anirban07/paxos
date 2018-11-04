@@ -98,7 +98,7 @@ func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 	listener, err := net.Listen("tcp", ":"+Port)
 	defer listener.Close()
 	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on " + string(ReplicaID))
+		err = errors.New("Failed to set up listening port " + Port + " on replica " + string(ReplicaID))
 		return err
 	}
 

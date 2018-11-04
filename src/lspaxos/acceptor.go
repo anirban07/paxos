@@ -26,7 +26,6 @@ type Acceptor struct {
 func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutResponse) (err error) {
 	if req.Ballot.Compare(thisAcceptor.Ballot) > 0 {
 		thisAcceptor.Ballot = req.Ballot
-		// For debug purposes, TODO: Anir, is there a better way to log this?
 		log.Printf(
 			"Acceptor %d updated ballot %+v, accepted: %+v\n",
 			thisAcceptor.AcceptorID,
@@ -37,6 +36,7 @@ func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutRespons
 
 	res.Ballot = thisAcceptor.Ballot
 	res.AcceptedValues = thisAcceptor.AcceptedValues
+	res.AcceptorID = thisAcceptor.AcceptorID
 	return nil
 }
 
@@ -56,6 +56,7 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 	}
 
 	res.Ballot = thisAcceptor.Ballot
+	res.AcceptorID = thisAcceptor.AcceptorID
 	return nil
 }
 
@@ -73,7 +74,7 @@ func StartAcceptor(AcceptorID int64, Port string) (err error) {
 	defer listener.Close()
 
 	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on " + string(AcceptorID))
+		err = errors.New("Failed to set up listening port " + Port + " on acceptor " + string(AcceptorID))
 		return err
 	}
 
