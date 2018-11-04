@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	additiveIncrease       = 500
+	multiplicativeDecrease = 2
+)
+
 type Client struct {
 	// Unique identifier of the client
 	clientID int64
@@ -62,23 +67,26 @@ func StartClient(
 				continue
 			}
 
-			if resp.Err == ErrLockHeld {
+			switch resp.Err {
+			case ErrLockHeld:
 				// Add constant amount to timeout
 				// Wait, then resend commands
 				// Have to increment the message id to deal with stale responses
-				thisClient.timeoutMillis += 500
+				thisClient.timeoutMillis += additiveIncrease
 				time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
 				thisClient.msgID++
 				thisClient.SendCommand(command, done)
 				continue
-			} else if resp.Err == OK {
+			case ErrInvalidUnlock:
+				log.Printf("Client %d issued invalid unlock request %+v\n", thisClient.clientID, command)
+			case OK:
 				log.Printf("Client %d successfully executed %+v\n", thisClient.clientID, command)
 			}
 
 			// Either way, we're here if the lock didn't exist
 			// or if the command succeeded. Need to exit and then decrease the
-			// timeout by a factor  of 2
-			thisClient.timeoutMillis /= 2
+			// timeout by a factor  of multiplicativeDecrease
+			thisClient.timeoutMillis /= multiplicativeDecrease
 			break
 		}
 

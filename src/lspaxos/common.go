@@ -9,9 +9,9 @@ type LockOp string
 type Err string
 
 const (
-	OK             = "OK"
-	ErrInvalidLock = "No such lock to unlock"
-	ErrLockHeld    = "Lock held by someone else"
+	OK               = "OK"
+	ErrInvalidUnlock = "Attempting to unlock unheld lock"
+	ErrLockHeld      = "Lock held by someone else"
 )
 
 const (
