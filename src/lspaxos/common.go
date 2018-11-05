@@ -15,8 +15,9 @@ const (
 )
 
 const (
-	Unlock LockOp = "Unlock"
-	Lock   LockOp = "Lock"
+	Unlock            LockOp = "Unlock"
+	Lock              LockOp = "Lock"
+	ChannelBufferSize        = 512
 )
 
 type Command struct {

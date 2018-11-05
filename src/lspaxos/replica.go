@@ -164,7 +164,6 @@ func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientRespons
 		for slot, decidedCommand := range thisReplica.decisions {
 			if req.Command.Equals(decidedCommand) && slot < thisReplica.slotOut {
 				lockOwner, lockIsOwned := thisReplica.lockMap[req.Command.LockName]
-				thisReplica.mu.Unlock()
 				switch req.Command.LockOp {
 				case Lock:
 					if lockIsOwned && lockOwner == req.Command.ClientID {
@@ -183,6 +182,7 @@ func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientRespons
 				break
 			}
 		}
+		thisReplica.mu.Unlock()
 	}
 	return nil
 }

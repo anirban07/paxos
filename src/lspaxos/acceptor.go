@@ -44,7 +44,8 @@ func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutRespons
 // Only accepts the command sent by the commander if the ballot of the commander is equivalent
 // to the ballot promised by the acceptor (i.e. The Commander is the leader)
 func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *CommanderResponse) (err error) {
-	if req.Ballot.Compare(thisAcceptor.ballot) == 0 {
+	if req.Ballot.Compare(thisAcceptor.ballot) >= 0 {
+		thisAcceptor.ballot = req.Ballot
 		thisAcceptor.acceptedValues[req.Slot] = req.Command
 		log.Printf(
 			"Acceptor %d accepted ballot:%+v slot:%d command:%+v \n",
