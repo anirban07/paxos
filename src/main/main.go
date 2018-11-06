@@ -17,7 +17,7 @@ func main() {
 
 	// Start the acceptors
 	for id, addr := range AcceptorAddrs {
-		go lspaxos.StartAcceptor(int64(id), strings.Split(addr, ":")[1])
+		go lspaxos.StartAcceptor(id, strings.Split(addr, ":")[1])
 	}
 
 	// Start the leaders
@@ -27,13 +27,13 @@ func main() {
 
 	// Start the replicas
 	for id, addr := range ReplicaAddrs {
-		go lspaxos.StartReplica(int64(id), LeaderAddrs, strings.Split(addr, ":")[1])
+		go lspaxos.StartReplica(id, LeaderAddrs, strings.Split(addr, ":")[1])
 	}
 	time.Sleep(1 * time.Second)
 
 	Spec := lspaxos.ReadSpec("src/specs/test_spec.txt")
-	go lspaxos.StartClient(int64(666), ReplicaAddrs, Spec)
-	go lspaxos.StartClient(int64(777), ReplicaAddrs, Spec)
+	go lspaxos.StartClientWithSpec(666, ReplicaAddrs, Spec)
+	go lspaxos.StartClientWithSpec(777, ReplicaAddrs, Spec)
 
 	for {
 		time.Sleep(1 * time.Second)

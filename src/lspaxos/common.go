@@ -9,9 +9,10 @@ type LockOp string
 type Err string
 
 const (
-	OK               = "OK"
-	ErrInvalidUnlock = "Attempting to unlock unheld lock"
-	ErrLockHeld      = "Lock held by someone else"
+	OK                 = "OK"
+	ErrInvalidUnlock   = "Attempting to unlock unheld lock"
+	ErrLockHeld        = "Lock held by someone else"
+	ErrConenctionError = "Connection error"
 )
 
 const (
@@ -31,7 +32,7 @@ type Command struct {
 	MsgID int
 
 	// Client Id
-	ClientID int64
+	ClientID int
 }
 
 func (this Command) Equals(other Command) bool {
@@ -107,7 +108,7 @@ type CommanderRequest struct {
 type CommanderResponse struct {
 	Ballot Ballot
 
-	AcceptorID int64
+	AcceptorID int
 }
 
 // Scout to Acceptor
@@ -124,7 +125,7 @@ type ScoutResponse struct {
 
 	AcceptedValues map[int]Command
 
-	AcceptorID int64
+	AcceptorID int
 }
 
 // Call is a wrapper function for creating a connection to a remote
@@ -141,16 +142,17 @@ func Call(
 	Done chan interface{},
 ) {
 	client, err := rpc.Dial("tcp", ServerAddress)
-	defer client.Close()
 	if err != nil {
 		log.Printf(
-			"Error on Dial() Server:%s Procedure:%s\n",
+			"Error on Dial() Server:%s Procedure:%s, %s\n",
 			ServerAddress,
 			ProcedureName,
+			err,
 		)
 		Done <- false
 		return
 	}
+	defer client.Close()
 	err = client.Call(ProcedureName, Request, Response)
 	if err != nil {
 		log.Printf(

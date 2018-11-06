@@ -12,7 +12,7 @@ import (
 // - Keeps track of a map of previously accepted commands (if any)
 type Acceptor struct {
 	// Unique identifier of the acceptor
-	acceptorID int64
+	acceptorID int
 
 	// Highest ballot number promised by this acceptor
 	ballot Ballot
@@ -66,7 +66,7 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 // Helper to spawn an instance of an Acceptor
 // Example usage: go StartAcceptorServer("Alpha", 1234)
 // Returns an error if unable to set up a listening port
-func StartAcceptor(AcceptorID int64, Port string) (err error) {
+func StartAcceptor(AcceptorID int, Port string) (err error) {
 	server := rpc.NewServer()
 	server.Register(&Acceptor{
 		acceptorID:     AcceptorID,
@@ -75,12 +75,12 @@ func StartAcceptor(AcceptorID int64, Port string) (err error) {
 	})
 	log.Printf("Acceptor %d listening on port %s\n", AcceptorID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
-	defer listener.Close()
 
 	if err != nil {
 		err = errors.New("Failed to set up listening port " + Port + " on acceptor " + string(AcceptorID))
 		return err
 	}
+	defer listener.Close()
 
 	server.Accept(listener)
 	return nil

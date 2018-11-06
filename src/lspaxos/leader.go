@@ -16,6 +16,9 @@ const (
 )
 
 type Leader struct {
+	// Identifies the leader
+	leaderID int
+
 	// Identifies the leader as well as their round
 	ballot Ballot
 
@@ -52,17 +55,17 @@ type Leader struct {
 
 func (thisLeader *Leader) scout() {
 	for {
-		log.Printf("Leader %d scout trying to grab lock\n", thisLeader.ballot.Leader)
+		log.Printf("Leader %d scout trying to grab lock\n", thisLeader.leaderID)
 		thisLeader.mu.Lock()
 		for thisLeader.active {
-			log.Printf("Leader %d is the leader, scout waiting...", thisLeader.ballot.Leader)
+			log.Printf("Leader %d is the leader, scout waiting...", thisLeader.leaderID)
 			thisLeader.needToScout.Wait()
-			log.Printf("Leader %d scout got woken up\n", thisLeader.ballot.Leader)
+			log.Printf("Leader %d scout got woken up\n", thisLeader.leaderID)
 		}
 
 		for !thisLeader.active {
 			// Set of acceptors we've received from
-			var received = make(map[int64]bool)
+			var received = make(map[int]bool)
 			// Probe the acceptors
 			var request = ScoutRequest{Ballot: thisLeader.ballot}
 			for _, acceptor := range thisLeader.acceptors {
@@ -84,13 +87,13 @@ func (thisLeader *Leader) scout() {
 					// (i.e. Don't need to resend messages)
 					log.Printf(
 						"Failed to get response from an acceptor on scout %d\n",
-						thisLeader.ballot.Leader,
+						thisLeader.leaderID,
 					)
 					continue
 				}
 
 				var res = response.(*ScoutResponse)
-				log.Printf("Leader %d got a scout response from acceptor %+v\n", thisLeader.ballot.Leader, res)
+				log.Printf("Leader %d got a scout response from acceptor %+v\n", thisLeader.leaderID, res)
 				var compareResult = thisLeader.ballot.Compare(res.Ballot)
 				if compareResult < 0 {
 					// We're pre-empted by somebody else, exit the loop
@@ -117,9 +120,9 @@ func (thisLeader *Leader) scout() {
 			if len(received) < thisLeader.majority {
 				// Sleep, then increment our timeout and ballot round
 				// Make explicit that we are no longer the leader
-				log.Printf("Leader %d is sleeping for %d milliseconds\n", thisLeader.ballot.Leader, thisLeader.timeout)
+				log.Printf("Leader %d is sleeping for %d milliseconds\n", thisLeader.leaderID, thisLeader.timeout)
 				time.Sleep(time.Duration(thisLeader.timeout) * time.Millisecond)
-				log.Printf("Leader %d is done sleeping\n", thisLeader.ballot.Leader)
+				log.Printf("Leader %d is done sleeping\n", thisLeader.leaderID)
 				thisLeader.timeout += leaderAdditiveIncrease
 				thisLeader.active = false
 			} else {
@@ -139,7 +142,7 @@ func (thisLeader *Leader) scout() {
 
 func (thisLeader *Leader) commander(slot int, command Command, ballot Ballot) {
 	// Set of acceptors we've received from
-	var received = make(map[int64]bool)
+	var received = make(map[int]bool)
 
 	// Channel that communicates with acceptors in the Scout process
 	commanderChannel := make(chan interface{}, len(thisLeader.acceptors))
@@ -160,20 +163,20 @@ func (thisLeader *Leader) commander(slot int, command Command, ballot Ballot) {
 	for len(received) < thisLeader.majority {
 		response := <-commanderChannel
 		if response == false {
-			log.Printf("Response from acceptor failed on scout %d\n", thisLeader.ballot.Leader)
+			log.Printf("Response from acceptor failed on scout %d\n", thisLeader.leaderID)
 			continue
 		}
 		commanderResponse := response.(*CommanderResponse)
-		log.Printf("Leader %d received a commander response from acceptor %+v, request %+v\n", thisLeader.ballot.Leader, commanderResponse, request.Command)
+		log.Printf("Leader %d received a commander response from acceptor %+v, request %+v\n", thisLeader.leaderID, commanderResponse, request.Command)
 		if ballot.Compare(commanderResponse.Ballot) == 0 {
 			received[commanderResponse.AcceptorID] = true
 		} else if ballot.Compare(commanderResponse.Ballot) < 0 {
 			// Preempted
 			thisLeader.mu.Lock()
 			if thisLeader.ballot.Compare(ballot) == 0 {
-				log.Printf("Leader %d is sleeping for %d milliseconds\n", thisLeader.ballot.Leader, thisLeader.timeout)
+				log.Printf("Leader %d is sleeping for %d milliseconds\n", thisLeader.leaderID, thisLeader.timeout)
 				time.Sleep(time.Duration(thisLeader.timeout) * time.Millisecond)
-				log.Printf("Leader %d is done sleeping\n", thisLeader.ballot.Leader)
+				log.Printf("Leader %d is done sleeping\n", thisLeader.leaderID)
 				thisLeader.timeout += leaderAdditiveIncrease
 				thisLeader.active = false
 				thisLeader.ballot.Number = commanderResponse.Ballot.Number + 1
@@ -193,7 +196,7 @@ func (thisLeader *Leader) commander(slot int, command Command, ballot Ballot) {
 
 func (thisLeader *Leader) ExecutePropose(req ReplicaRequest, res *ReplicaResponse) (err error) {
 	res.Slot = req.Slot
-	log.Printf("Leader %d got a replica request %+v\n", thisLeader.ballot.Leader, req)
+	log.Printf("Leader %d got a replica request %+v\n", thisLeader.leaderID, req)
 	thisLeader.mu.Lock()
 	defer thisLeader.mu.Unlock()
 	decision, decided := thisLeader.decisions[req.Slot]
@@ -220,13 +223,14 @@ func (thisLeader *Leader) ExecutePropose(req ReplicaRequest, res *ReplicaRespons
 
 		}
 		res.Command = thisLeader.decisions[req.Slot]
-		log.Printf("Leader %d decided %+v for slot %d\n", thisLeader.ballot.Leader, res.Command, res.Slot)
+		log.Printf("Leader %d decided %+v for slot %d\n", thisLeader.leaderID, res.Command, res.Slot)
 	}
 	return nil
 }
 
 func StartLeader(LeaderID int, Acceptors []string, Port string) (err error) {
 	thisLeader := &Leader{
+		leaderID:     LeaderID,
 		ballot:       Ballot{Number: 0, Leader: LeaderID},
 		acceptors:    Acceptors,
 		active:       false,
@@ -245,11 +249,11 @@ func StartLeader(LeaderID int, Acceptors []string, Port string) (err error) {
 
 	log.Printf("Leader %d listening on port %s\n", LeaderID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
-	defer listener.Close()
 	if err != nil {
 		err = errors.New("Failed to set up listening port " + Port + " on leader " + string(LeaderID))
 		return err
 	}
+	defer listener.Close()
 
 	server.Accept(listener)
 	return nil

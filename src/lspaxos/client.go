@@ -15,7 +15,7 @@ const (
 
 type Client struct {
 	// Unique identifier of the client
-	clientID int64
+	clientID int
 
 	// Initial request sequence number / message id number
 	// Should start at 0
@@ -26,12 +26,15 @@ type Client struct {
 
 	// Current time out
 	timeoutMillis int
+
+	// Response channel for replicas
+	responseChannel chan interface{}
 }
 
 // Starts a client that issues requests in the order
 // of the given specification of lock/unlock operations
-func StartClient(
-	ClientID int64,
+func StartClientWithSpec(
+	ClientID int,
 	Replicas []string,
 	Spec []string,
 ) (err error) {
@@ -96,6 +99,53 @@ func StartClient(
 		thisClient.msgID++
 	}
 	return nil
+}
+
+func StartClient(ClientID int, Replicas []string) Client {
+	return Client{
+		clientID:        ClientID,
+		msgID:           1,
+		replicas:        Replicas,
+		timeoutMillis:   100,
+		responseChannel: make(chan interface{}, len(Replicas)*2),
+	}
+}
+
+func (thisClient *Client) Lock(LockName string) Err {
+	command := Command{
+		LockName: LockName,
+		LockOp:   Lock,
+		MsgID:    thisClient.msgID,
+		ClientID: thisClient.clientID,
+	}
+	return thisClient.sendAndWaitForResponse(command)
+}
+
+func (thisClient *Client) Unlock(LockName string) Err {
+	command := Command{
+		LockName: LockName,
+		LockOp:   Unlock,
+		MsgID:    thisClient.msgID,
+		ClientID: thisClient.clientID,
+	}
+	return thisClient.sendAndWaitForResponse(command)
+}
+
+func (thisClient *Client) sendAndWaitForResponse(command Command) Err {
+	// Send the command to each replica
+	done := make(chan interface{})
+	thisClient.SendCommand(command, done)
+	for {
+		response := <-thisClient.responseChannel
+		if response == false {
+			return ErrConenctionError
+		}
+		clientResponse := response.(*ClientResponse)
+		if clientResponse.MsgID == thisClient.msgID {
+			log.Println(clientResponse.Err)
+			return clientResponse.Err
+		}
+	}
 }
 
 // Send a command to every replica asynchronously

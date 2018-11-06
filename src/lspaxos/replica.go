@@ -21,10 +21,10 @@ type Replica struct {
 	mu sync.Mutex
 
 	// Unique identifier of the replica
-	replicaID int64
+	replicaID int
 
 	// Map from lock name to client holding it
-	lockMap map[string]int64
+	lockMap map[string]int
 
 	// The index of the next slot in which the replica
 	// has not yet proposed any command, initially 1
@@ -121,12 +121,12 @@ func (thisReplica *Replica) perform() {
 	}
 }
 
-func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
+func StartReplica(ReplicaID int, Leaders []string, Port string) (err error) {
 	thisReplica := &Replica{
 		mu:               sync.Mutex{},
 		replicaResponses: make(chan interface{}, ReplicaResponsesChannelSize),
 		replicaID:        ReplicaID,
-		lockMap:          make(map[string]int64),
+		lockMap:          make(map[string]int),
 		slotIn:           1,
 		slotOut:          1,
 		requests:         make([]Command, 0),
@@ -140,11 +140,11 @@ func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 	server.Register(thisReplica)
 	log.Printf("Replica %d listening on port %s\n", ReplicaID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
-	defer listener.Close()
 	if err != nil {
 		err = errors.New("Failed to set up listening port " + Port + " on replica " + string(ReplicaID))
 		return err
 	}
+	defer listener.Close()
 
 	go thisReplica.propose()
 	go thisReplica.perform()
