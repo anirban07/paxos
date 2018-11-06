@@ -56,6 +56,7 @@ type Replica struct {
 func (thisReplica *Replica) propose() {
 	for {
 		thisReplica.mu.Lock()
+		log.Printf("Replica %d has proposals %+v\n", thisReplica.replicaID, thisReplica.proposals)
 		for len(thisReplica.requests) == 0 {
 			thisReplica.newRequest.Wait()
 		}
@@ -87,10 +88,10 @@ func (thisReplica *Replica) perform() {
 	for {
 		response := <-thisReplica.replicaResponses
 		if response == false {
-			// TODO: Do we expect a failure here?
 			continue
 		}
-		replicaResponse := response.(ReplicaResponse)
+		replicaResponse := response.(*ReplicaResponse)
+		log.Printf("Replica %d got a response %+v\n", thisReplica.replicaID, replicaResponse)
 		thisReplica.mu.Lock()
 		thisReplica.decisions[replicaResponse.Slot] = replicaResponse.Command
 		decidedCommand, present := thisReplica.decisions[thisReplica.slotOut]
@@ -128,14 +129,15 @@ func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 		lockMap:          make(map[string]int64),
 		slotIn:           1,
 		slotOut:          1,
-		requests:         make([]Command, 8),
+		requests:         make([]Command, 0),
 		proposals:        make(map[int]Command),
 		decisions:        make(map[int]Command),
 		leaders:          Leaders,
 	}
 	thisReplica.newRequest = sync.Cond{L: &thisReplica.mu}
 	thisReplica.somethingPerformed = sync.Cond{L: &thisReplica.mu}
-	rpc.Register(thisReplica)
+	server := rpc.NewServer()
+	server.Register(thisReplica)
 	log.Printf("Replica %d listening on port %s\n", ReplicaID, Port)
 	listener, err := net.Listen("tcp", ":"+Port)
 	defer listener.Close()
@@ -145,12 +147,15 @@ func StartReplica(ReplicaID int64, Leaders []string, Port string) (err error) {
 	}
 
 	go thisReplica.propose()
-	rpc.Accept(listener)
+	go thisReplica.perform()
+	server.Accept(listener)
 	return nil
 }
 
 func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientResponse) (err error) {
 	// TODO: Check for duplicate req in Requests, Proposals, Decisions
+	// This is impossible
+	log.Printf("Replica %d got a request %+v\n", thisReplica.replicaID, req.Command)
 	res.MsgID = req.Command.MsgID
 	requestDecided := false
 	thisReplica.mu.Lock()

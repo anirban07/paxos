@@ -24,6 +24,7 @@ type Acceptor struct {
 // Handler for Scout RPC's
 // Checks if ballot number is higher and updates if necessary
 func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutResponse) (err error) {
+	log.Printf("Acceptor %d got a propose request %+v\n", thisAcceptor.acceptorID, req)
 	if req.Ballot.Compare(thisAcceptor.ballot) > 0 {
 		thisAcceptor.ballot = req.Ballot
 		log.Printf(
@@ -44,6 +45,7 @@ func (thisAcceptor *Acceptor) ExecutePropose(req ScoutRequest, res *ScoutRespons
 // Only accepts the command sent by the commander if the ballot of the commander is equivalent
 // to the ballot promised by the acceptor (i.e. The Commander is the leader)
 func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *CommanderResponse) (err error) {
+	log.Printf("Acceptor %d got an accept request %+v\n", thisAcceptor.acceptorID, req)
 	if req.Ballot.Compare(thisAcceptor.ballot) >= 0 {
 		thisAcceptor.ballot = req.Ballot
 		thisAcceptor.acceptedValues[req.Slot] = req.Command
@@ -65,7 +67,8 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 // Example usage: go StartAcceptorServer("Alpha", 1234)
 // Returns an error if unable to set up a listening port
 func StartAcceptor(AcceptorID int64, Port string) (err error) {
-	rpc.Register(&Acceptor{
+	server := rpc.NewServer()
+	server.Register(&Acceptor{
 		acceptorID:     AcceptorID,
 		ballot:         Ballot{-1, -1},
 		acceptedValues: make(map[int]Command),
@@ -79,6 +82,6 @@ func StartAcceptor(AcceptorID int64, Port string) (err error) {
 		return err
 	}
 
-	rpc.Accept(listener)
+	server.Accept(listener)
 	return nil
 }

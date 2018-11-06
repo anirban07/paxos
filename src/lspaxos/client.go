@@ -61,7 +61,7 @@ func StartClient(
 				return errors.New("Failed to call replica, invariant broken")
 			}
 
-			var resp = response.(ClientResponse)
+			var resp = response.(*ClientResponse)
 			if resp.MsgID != thisClient.msgID {
 				// Stale message
 				continue
@@ -99,6 +99,7 @@ func StartClient(
 
 // Send a command to every replica asynchronously
 func (thisClient *Client) SendCommand(Command Command, Done chan interface{}) {
+	log.Printf("Client %d sent request %+v\n", thisClient.clientID, Command)
 	for _, server := range thisClient.replicas {
 		request := ClientRequest{Command: Command}
 		response := new(ClientResponse)
