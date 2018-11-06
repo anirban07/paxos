@@ -55,6 +55,9 @@ type Leader struct {
 	// Listener
 	listener net.Listener
 
+	// Address
+	Address string
+
 	// For debugging
 	dead int32
 }
@@ -248,14 +251,15 @@ func (thisLeader *Leader) isDead() bool {
 
 //StartLeader starts an acceptor instance and returns an Leader struct.
 //The struct can be used to kill this instance.
-func StartLeader(LeaderID int, Acceptors []string, Port string) (leader *Leader) {
+func StartLeader(LeaderID int, Acceptors []string, Address string) (leader *Leader) {
 	server := rpc.NewServer()
-	listener, err := net.Listen("tcp", ":"+Port)
+	listener, err := net.Listen("tcp", Address)
 	if err != nil {
 		log.Fatalf(
-			"Leader %d failed to set up listening port %s\n",
+			"Leader %d failed to set up listening address %s, %s\n",
 			LeaderID,
-			Port,
+			Address,
+			err,
 		)
 		return nil
 	}
@@ -272,6 +276,7 @@ func StartLeader(LeaderID int, Acceptors []string, Port string) (leader *Leader)
 		decisions:    make(map[int]Command),
 		listener:     listener,
 		dead:         0,
+		Address:      listener.Addr().String(),
 	}
 	leader.needToScout = sync.Cond{L: &leader.mu}
 	leader.somethingDecided = sync.Cond{L: &leader.mu}
@@ -283,9 +288,9 @@ func StartLeader(LeaderID int, Acceptors []string, Port string) (leader *Leader)
 			connection, err := leader.listener.Accept()
 			if err == nil {
 				log.Printf("Leader accepted request\n")
-				server.ServeConn(connection)
+				go server.ServeConn(connection)
 			} else {
-				log.Fatalf("Leader %d failed to accept connection\n", LeaderID)
+				log.Fatalf("Leader %d failed to accept connection, %s\n", LeaderID, err)
 			}
 		}
 	}()

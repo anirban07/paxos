@@ -55,6 +55,9 @@ type Replica struct {
 	// Listener
 	listener net.Listener
 
+	// Address
+	Address string
+
 	// For debugging
 	dead int32
 }
@@ -181,14 +184,15 @@ func (thisReplica *Replica) isDead() bool {
 
 //StartReplica starts an acceptor instance and returns an Replica struct.
 //The struct can be used to kill this instance.
-func StartReplica(ReplicaID int, Leaders []string, Port string) (replica *Replica) {
+func StartReplica(ReplicaID int, Leaders []string, Address string) (replica *Replica) {
 	server := rpc.NewServer()
-	listener, err := net.Listen("tcp", ":"+Port)
+	listener, err := net.Listen("tcp", Address)
 	if err != nil {
 		log.Fatalf(
-			"Replica %d failed to set up listening port %s\n",
+			"Replica %d failed to set up listening address %s, %s\n",
 			ReplicaID,
-			Port,
+			Address,
+			err,
 		)
 		return nil
 	}
@@ -205,6 +209,7 @@ func StartReplica(ReplicaID int, Leaders []string, Port string) (replica *Replic
 		leaders:          Leaders,
 		listener:         listener,
 		dead:             0,
+		Address:          listener.Addr().String(),
 	}
 	replica.newRequest = sync.Cond{L: &replica.mu}
 	replica.somethingPerformed = sync.Cond{L: &replica.mu}
@@ -216,9 +221,9 @@ func StartReplica(ReplicaID int, Leaders []string, Port string) (replica *Replic
 			connection, err := replica.listener.Accept()
 			if err == nil {
 				log.Printf("Replica accepted request\n")
-				server.ServeConn(connection)
+				go server.ServeConn(connection)
 			} else {
-				log.Fatalf("Replica %d failed to accept connection\n", ReplicaID)
+				log.Fatalf("Replica %d failed to accept connection, %s\n", ReplicaID, err)
 			}
 		}
 	}()

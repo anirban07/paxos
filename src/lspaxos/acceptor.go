@@ -23,6 +23,9 @@ type Acceptor struct {
 	// Listener
 	listener net.Listener
 
+	// Address
+	Address string
+
 	// For debugging
 	dead int32
 }
@@ -70,11 +73,11 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 }
 
 func (thisAcceptor *Acceptor) kill() {
-	log.Printf("Killing acceptor %d\n", thisAcceptor.acceptorID)
 	atomic.StoreInt32(&thisAcceptor.dead, 1)
 	if thisAcceptor.listener != nil {
 		thisAcceptor.listener.Close()
 	}
+	log.Printf("Killed acceptor %d\n", thisAcceptor.acceptorID)
 }
 
 func (thisAcceptor *Acceptor) isDead() bool {
@@ -83,14 +86,15 @@ func (thisAcceptor *Acceptor) isDead() bool {
 
 //StartAcceptor starts an acceptor instance and returns an Acceptor struct.
 //The struct can be used to kill this instance.
-func StartAcceptor(AcceptorID int, Port string) (acceptor *Acceptor) {
+func StartAcceptor(AcceptorID int, Address string) (acceptor *Acceptor) {
 	server := rpc.NewServer()
-	listener, err := net.Listen("tcp", ":"+Port)
+	listener, err := net.Listen("tcp", Address)
 	if err != nil {
 		log.Fatalf(
-			"Acceptor %d failed to set up listening port %s\n",
+			"Acceptor %d failed to set up listening address %s, %s\n",
 			AcceptorID,
-			Port,
+			Address,
+			err,
 		)
 		return nil
 	}
@@ -100,6 +104,7 @@ func StartAcceptor(AcceptorID int, Port string) (acceptor *Acceptor) {
 		acceptedValues: make(map[int]Command),
 		listener:       listener,
 		dead:           0,
+		Address:        listener.Addr().String(),
 	}
 	server.Register(acceptor)
 
@@ -109,9 +114,9 @@ func StartAcceptor(AcceptorID int, Port string) (acceptor *Acceptor) {
 			connection, err := acceptor.listener.Accept()
 			if err == nil {
 				log.Printf("Acceptor accepted request\n")
-				server.ServeConn(connection)
+				go server.ServeConn(connection)
 			} else {
-				log.Fatalf("Acceptor %d failed to accept connection\n", AcceptorID)
+				log.Fatalf("Acceptor %d failed to accept connection, %s\n", AcceptorID, err)
 			}
 		}
 	}()
