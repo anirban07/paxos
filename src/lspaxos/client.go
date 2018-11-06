@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 )
 
 const (
@@ -72,9 +71,12 @@ func StartClient(
 				// Add constant amount to timeout
 				// Wait, then resend commands
 				// Have to increment the message id to deal with stale responses
+				log.Printf("Client %d requested a held lock\n", thisClient.clientID)
 				thisClient.timeoutMillis += additiveIncrease
-				time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
+				//time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
+				//log.Printf("Client %d woke up\n", thisClient.clientID)
 				thisClient.msgID++
+				command.MsgID = thisClient.msgID
 				thisClient.SendCommand(command, done)
 				continue
 			case ErrInvalidUnlock:
@@ -93,7 +95,6 @@ func StartClient(
 		// Start the next message
 		thisClient.msgID++
 	}
-	close(done)
 	return nil
 }
 

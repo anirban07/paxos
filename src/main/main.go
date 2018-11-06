@@ -3,6 +3,7 @@ package main
 import (
 	"lspaxos"
 	"strings"
+	"time"
 )
 
 const (
@@ -28,7 +29,13 @@ func main() {
 	for id, addr := range ReplicaAddrs {
 		go lspaxos.StartReplica(int64(id), LeaderAddrs, strings.Split(addr, ":")[1])
 	}
+	time.Sleep(1 * time.Second)
 
 	Spec := lspaxos.ReadSpec("src/specs/test_spec.txt")
-	lspaxos.StartClient(int64(666), ReplicaAddrs, Spec)
+	go lspaxos.StartClient(int64(666), ReplicaAddrs, Spec)
+	go lspaxos.StartClient(int64(777), ReplicaAddrs, Spec)
+
+	for {
+		time.Sleep(1 * time.Second)
+	}
 }

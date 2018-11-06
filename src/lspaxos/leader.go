@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	leaderInitialTimeout   = 20
-	leaderAdditiveIncrease = 10
+	leaderInitialTimeout   = 100
+	leaderAdditiveIncrease = 50
 	leaderMultDecrease     = 2
 )
 
@@ -164,7 +164,7 @@ func (thisLeader *Leader) commander(slot int, command Command, ballot Ballot) {
 			continue
 		}
 		commanderResponse := response.(*CommanderResponse)
-		log.Printf("Leader %d received a commander response from acceptor %+v\n", thisLeader.ballot.Leader, commanderResponse)
+		log.Printf("Leader %d received a commander response from acceptor %+v, request %+v\n", thisLeader.ballot.Leader, commanderResponse, request.Command)
 		if ballot.Compare(commanderResponse.Ballot) == 0 {
 			received[commanderResponse.AcceptorID] = true
 		} else if ballot.Compare(commanderResponse.Ballot) < 0 {
