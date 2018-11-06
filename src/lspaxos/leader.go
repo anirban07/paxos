@@ -1,11 +1,11 @@
 package lspaxos
 
 import (
-	"errors"
 	"log"
 	"net"
 	"net/rpc"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,6 +51,12 @@ type Leader struct {
 
 	// Condition variable for when something is decided
 	somethingDecided sync.Cond
+
+	// Listener
+	listener net.Listener
+
+	// For debugging
+	dead int32
 }
 
 func (thisLeader *Leader) scout() {
@@ -228,8 +234,33 @@ func (thisLeader *Leader) ExecutePropose(req ReplicaRequest, res *ReplicaRespons
 	return nil
 }
 
-func StartLeader(LeaderID int, Acceptors []string, Port string) (err error) {
-	thisLeader := &Leader{
+func (thisLeader *Leader) kill() {
+	log.Printf("Killing leader %d\n", thisLeader.leaderID)
+	atomic.StoreInt32(&thisLeader.dead, 1)
+	if thisLeader.listener != nil {
+		thisLeader.listener.Close()
+	}
+}
+
+func (thisLeader *Leader) isDead() bool {
+	return atomic.LoadInt32(&thisLeader.dead) != 0
+}
+
+//StartLeader starts an acceptor instance and returns an Leader struct.
+//The struct can be used to kill this instance.
+func StartLeader(LeaderID int, Acceptors []string, Port string) (leader *Leader) {
+	server := rpc.NewServer()
+	listener, err := net.Listen("tcp", ":"+Port)
+	if err != nil {
+		log.Fatalf(
+			"Leader %d failed to set up listening port %s\n",
+			LeaderID,
+			Port,
+		)
+		return nil
+	}
+	leader = &Leader{
+		mu:           sync.Mutex{},
 		leaderID:     LeaderID,
 		ballot:       Ballot{Number: 0, Leader: LeaderID},
 		acceptors:    Acceptors,
@@ -239,22 +270,24 @@ func StartLeader(LeaderID int, Acceptors []string, Port string) (err error) {
 		scoutChannel: make(chan interface{}, ChannelBufferSize),
 		proposals:    make(map[int]Command),
 		decisions:    make(map[int]Command),
+		listener:     listener,
+		dead:         0,
 	}
-	thisLeader.needToScout = sync.Cond{L: &thisLeader.mu}
-	thisLeader.somethingDecided = sync.Cond{L: &thisLeader.mu}
-	server := rpc.NewServer()
-	server.Register(thisLeader)
+	leader.needToScout = sync.Cond{L: &leader.mu}
+	leader.somethingDecided = sync.Cond{L: &leader.mu}
+	server.Register(leader)
 
-	go thisLeader.scout()
-
-	log.Printf("Leader %d listening on port %s\n", LeaderID, Port)
-	listener, err := net.Listen("tcp", ":"+Port)
-	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on leader " + string(LeaderID))
-		return err
-	}
-	defer listener.Close()
-
-	server.Accept(listener)
-	return nil
+	go func() {
+		for !leader.isDead() {
+			log.Printf("Leader %d listening for requests\n", LeaderID)
+			connection, err := leader.listener.Accept()
+			if err == nil {
+				log.Printf("Leader accepted request\n")
+				server.ServeConn(connection)
+			} else {
+				log.Fatalf("Leader %d failed to accept connection\n", LeaderID)
+			}
+		}
+	}()
+	return leader
 }

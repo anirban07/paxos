@@ -1,10 +1,10 @@
 package lspaxos
 
 import (
-	"errors"
 	"log"
 	"net"
 	"net/rpc"
+	"sync/atomic"
 )
 
 // Defines an the Acceptor state
@@ -19,6 +19,12 @@ type Acceptor struct {
 
 	// Map to store slot number with commands
 	acceptedValues map[int]Command
+
+	// Listener
+	listener net.Listener
+
+	// For debugging
+	dead int32
 }
 
 // Handler for Scout RPC's
@@ -63,25 +69,51 @@ func (thisAcceptor *Acceptor) ExecuteAccept(req CommanderRequest, res *Commander
 	return nil
 }
 
-// Helper to spawn an instance of an Acceptor
-// Example usage: go StartAcceptorServer("Alpha", 1234)
-// Returns an error if unable to set up a listening port
-func StartAcceptor(AcceptorID int, Port string) (err error) {
+func (thisAcceptor *Acceptor) kill() {
+	log.Printf("Killing acceptor %d\n", thisAcceptor.acceptorID)
+	atomic.StoreInt32(&thisAcceptor.dead, 1)
+	if thisAcceptor.listener != nil {
+		thisAcceptor.listener.Close()
+	}
+}
+
+func (thisAcceptor *Acceptor) isDead() bool {
+	return atomic.LoadInt32(&thisAcceptor.dead) != 0
+}
+
+//StartAcceptor starts an acceptor instance and returns an Acceptor struct.
+//The struct can be used to kill this instance.
+func StartAcceptor(AcceptorID int, Port string) (acceptor *Acceptor) {
 	server := rpc.NewServer()
-	server.Register(&Acceptor{
+	listener, err := net.Listen("tcp", ":"+Port)
+	if err != nil {
+		log.Fatalf(
+			"Acceptor %d failed to set up listening port %s\n",
+			AcceptorID,
+			Port,
+		)
+		return nil
+	}
+	acceptor = &Acceptor{
 		acceptorID:     AcceptorID,
 		ballot:         Ballot{-1, -1},
 		acceptedValues: make(map[int]Command),
-	})
-	log.Printf("Acceptor %d listening on port %s\n", AcceptorID, Port)
-	listener, err := net.Listen("tcp", ":"+Port)
-
-	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on acceptor " + string(AcceptorID))
-		return err
+		listener:       listener,
+		dead:           0,
 	}
-	defer listener.Close()
+	server.Register(acceptor)
 
-	server.Accept(listener)
-	return nil
+	go func() {
+		for !acceptor.isDead() {
+			log.Printf("Acceptor %d listening for requests\n", AcceptorID)
+			connection, err := acceptor.listener.Accept()
+			if err == nil {
+				log.Printf("Acceptor accepted request\n")
+				server.ServeConn(connection)
+			} else {
+				log.Fatalf("Acceptor %d failed to accept connection\n", AcceptorID)
+			}
+		}
+	}()
+	return acceptor
 }

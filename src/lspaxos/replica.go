@@ -1,11 +1,11 @@
 package lspaxos
 
 import (
-	"errors"
 	"log"
 	"net"
 	"net/rpc"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -51,6 +51,12 @@ type Replica struct {
 
 	// Leaders
 	leaders []string
+
+	// Listener
+	listener net.Listener
+
+	// For debugging
+	dead int32
 }
 
 func (thisReplica *Replica) propose() {
@@ -121,37 +127,6 @@ func (thisReplica *Replica) perform() {
 	}
 }
 
-func StartReplica(ReplicaID int, Leaders []string, Port string) (err error) {
-	thisReplica := &Replica{
-		mu:               sync.Mutex{},
-		replicaResponses: make(chan interface{}, ReplicaResponsesChannelSize),
-		replicaID:        ReplicaID,
-		lockMap:          make(map[string]int),
-		slotIn:           1,
-		slotOut:          1,
-		requests:         make([]Command, 0),
-		proposals:        make(map[int]Command),
-		decisions:        make(map[int]Command),
-		leaders:          Leaders,
-	}
-	thisReplica.newRequest = sync.Cond{L: &thisReplica.mu}
-	thisReplica.somethingPerformed = sync.Cond{L: &thisReplica.mu}
-	server := rpc.NewServer()
-	server.Register(thisReplica)
-	log.Printf("Replica %d listening on port %s\n", ReplicaID, Port)
-	listener, err := net.Listen("tcp", ":"+Port)
-	if err != nil {
-		err = errors.New("Failed to set up listening port " + Port + " on replica " + string(ReplicaID))
-		return err
-	}
-	defer listener.Close()
-
-	go thisReplica.propose()
-	go thisReplica.perform()
-	server.Accept(listener)
-	return nil
-}
-
 func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientResponse) (err error) {
 	// TODO: Check for duplicate req in Requests, Proposals, Decisions
 	// This is impossible
@@ -190,4 +165,62 @@ func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientRespons
 		thisReplica.mu.Unlock()
 	}
 	return nil
+}
+
+func (thisReplica *Replica) kill() {
+	log.Printf("Killing replica %d\n", thisReplica.replicaID)
+	atomic.StoreInt32(&thisReplica.dead, 1)
+	if thisReplica.listener != nil {
+		thisReplica.listener.Close()
+	}
+}
+
+func (thisReplica *Replica) isDead() bool {
+	return atomic.LoadInt32(&thisReplica.dead) != 0
+}
+
+//StartReplica starts an acceptor instance and returns an Replica struct.
+//The struct can be used to kill this instance.
+func StartReplica(ReplicaID int, Leaders []string, Port string) (replica *Replica) {
+	server := rpc.NewServer()
+	listener, err := net.Listen("tcp", ":"+Port)
+	if err != nil {
+		log.Fatalf(
+			"Replica %d failed to set up listening port %s\n",
+			ReplicaID,
+			Port,
+		)
+		return nil
+	}
+	replica = &Replica{
+		mu:               sync.Mutex{},
+		replicaResponses: make(chan interface{}, ReplicaResponsesChannelSize),
+		replicaID:        ReplicaID,
+		lockMap:          make(map[string]int),
+		slotIn:           1,
+		slotOut:          1,
+		requests:         make([]Command, 0),
+		proposals:        make(map[int]Command),
+		decisions:        make(map[int]Command),
+		leaders:          Leaders,
+		listener:         listener,
+		dead:             0,
+	}
+	replica.newRequest = sync.Cond{L: &replica.mu}
+	replica.somethingPerformed = sync.Cond{L: &replica.mu}
+	server.Register(replica)
+
+	go func() {
+		for !replica.isDead() {
+			log.Printf("Replica %d listening for requests\n", ReplicaID)
+			connection, err := replica.listener.Accept()
+			if err == nil {
+				log.Printf("Replica accepted request\n")
+				server.ServeConn(connection)
+			} else {
+				log.Fatalf("Replica %d failed to accept connection\n", ReplicaID)
+			}
+		}
+	}()
+	return replica
 }
