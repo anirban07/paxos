@@ -6,52 +6,14 @@ import (
 )
 
 const (
-	acceptorOffset int    = 10000
-	leaderOffset   int    = 20000
-	replicaOffset  int    = 30000
-	ip             string = "localhost:"
+	acceptorOffset       int    = 10000
+	leaderOffset         int    = 20000
+	replicaOffset        int    = 30000
+	ip                   string = "localhost:"
+	timeoutMillis        int    = 100
+	timeoutMillisAddInc  int    = 50
+	timeoutMillisMultDec int    = 2
 )
-
-func startAcceptors(
-	numAcceptors int,
-) (acceptorAddresses []string, acceptors []*Acceptor) {
-	acceptorAddresses = make([]string, numAcceptors)
-	acceptors = make([]*Acceptor, numAcceptors)
-	for i := 0; i < numAcceptors; i++ {
-		acceptor := StartAcceptor(i, "")
-		acceptorAddresses[i] = acceptor.Address
-		acceptors[i] = acceptor
-	}
-	return acceptorAddresses, acceptors
-}
-
-func startLeaders(
-	numLeaders int,
-	acceptorAddresses []string,
-) (leaderAddresses []string, leaders []*Leader) {
-	leaderAddresses = make([]string, numLeaders)
-	leaders = make([]*Leader, numLeaders)
-	for i := 0; i < numLeaders; i++ {
-		leader := StartLeader(i, acceptorAddresses, "")
-		leaderAddresses[i] = leader.Address
-		leaders[i] = leader
-	}
-	return leaderAddresses, leaders
-}
-
-func startReplicas(
-	numReplicas int,
-	leaderAddresses []string,
-) (replicaAddresses []string, replicas []*Replica) {
-	replicaAddresses = make([]string, numReplicas)
-	replicas = make([]*Replica, numReplicas)
-	for i := 0; i < numReplicas; i++ {
-		replica := StartReplica(i, leaderAddresses, "")
-		replicaAddresses[i] = replica.Address
-		replicas[i] = replica
-	}
-	return replicaAddresses, replicas
-}
 
 func failOnError(t *testing.T, err Err, format string, args ...interface{}) {
 	if err != OK {
@@ -80,7 +42,7 @@ func cleanup(acceptors []*Acceptor, leaders []*Leader, replicas []*Replica) {
 }
 
 func TestKillAcceptor(t *testing.T) {
-	_, acceptors := startAcceptors(1)
+	_, acceptors := StartAcceptors(1)
 	if acceptors[0].isDead() {
 		t.Errorf("Acceptor is dead, expected to be alive\n")
 	}
@@ -92,8 +54,8 @@ func TestKillAcceptor(t *testing.T) {
 }
 
 func TestKillLeader(t *testing.T) {
-	acceptorAddresses, acceptors := startAcceptors(1)
-	_, leaders := startLeaders(1, acceptorAddresses)
+	acceptorAddresses, acceptors := StartAcceptors(1)
+	_, leaders := StartLeaders(1, acceptorAddresses)
 	if leaders[0].isDead() {
 		t.Errorf("Leader is dead, expected to be alive\n")
 	}
@@ -111,9 +73,9 @@ func TestKillLeader(t *testing.T) {
 }
 
 func TestKillReplicas(t *testing.T) {
-	acceptorAddresses, acceptors := startAcceptors(1)
-	leaderAddresses, leaders := startLeaders(1, acceptorAddresses)
-	_, replicas := startReplicas(1, leaderAddresses)
+	acceptorAddresses, acceptors := StartAcceptors(1)
+	leaderAddresses, leaders := StartLeaders(1, acceptorAddresses)
+	_, replicas := StartReplicas(1, leaderAddresses)
 	if replicas[0].isDead() {
 		t.Errorf("Replica is dead, expected to be alive\n")
 	}
@@ -142,18 +104,18 @@ func Test1c1r1l3a(t *testing.T) {
 	numLeaders := 1
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -167,18 +129,18 @@ func Test1c1r3l3a(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -192,18 +154,18 @@ func Test1c3r1l3a(t *testing.T) {
 	numLeaders := 1
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -217,18 +179,18 @@ func Test1c3r3l3a(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -242,19 +204,19 @@ func Test1c3r3l3aFailingReplicas(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
 	replicas[0].kill()
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	replicas[2].kill()
 	err = client0.Unlock(lockA)
@@ -269,19 +231,19 @@ func Test1c3r3l3aFailingLeaders(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
 	leaders[1].kill()
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -296,18 +258,18 @@ func Test1c3r3l3aFailingAcceptors(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -322,20 +284,20 @@ func Test1c3r3l3aFailingAll(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	err := client0.Lock(lockA)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
 	leaders[1].kill()
 	replicas[0].kill()
-	err = client0.Lock(lockB)
+	err = client0.TryLock(lockB)
 	failOnError(t, err, "")
 	acceptors[0].kill()
 	err = client0.Unlock(lockA)
@@ -352,17 +314,17 @@ func Test1c1r1l3aInvalidLockRequest(t *testing.T) {
 	numLeaders := 1
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
 
-	err := client0.Lock(lockA)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockB)
 	if err != ErrInvalidUnlock {
@@ -379,20 +341,20 @@ func Test2c1r1l3aIndependentLocks(t *testing.T) {
 	numLeaders := 1
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
-	client0 := StartClient(0, replicaAddresses)
-	client1 := StartClient(1, replicaAddresses)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	client1 := StartClient(1, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
 
-	err := client0.Lock(lockA)
+	err := client0.TryLock(lockA)
 	failOnError(t, err, "")
-	err = client1.Lock(lockB)
+	err = client1.TryLock(lockB)
 	failOnError(t, err, "")
 	err = client0.Unlock(lockA)
 	failOnError(t, err, "")
@@ -406,15 +368,15 @@ func Test2c1r1l3aContendingLocks(t *testing.T) {
 	numLeaders := 1
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
-	client0 := StartClient(0, replicaAddresses)
-	client1 := StartClient(1, replicaAddresses)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	client1 := StartClient(1, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
 
 	client0Channel := make(chan Err, 100)
 	client1Channel := make(chan Err, 100)
@@ -453,15 +415,15 @@ func Test2c1r1l3aContendingLocksFailingAll(t *testing.T) {
 	numLeaders := 3
 	numAcceptors := 3
 
-	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	acceptorAddresses, acceptors := StartAcceptors(numAcceptors)
 	time.Sleep(500 * time.Millisecond)
-	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
-	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	leaderAddresses, leaders := StartLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := StartReplicas(numReplicas, leaderAddresses)
 	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
-	client0 := StartClient(0, replicaAddresses)
-	client1 := StartClient(1, replicaAddresses)
+	client0 := StartClient(0, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
+	client1 := StartClient(1, replicaAddresses, timeoutMillis, timeoutMillisAddInc, timeoutMillisMultDec)
 
 	client0Channel := make(chan Err, 100)
 	client1Channel := make(chan Err, 100)

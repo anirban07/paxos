@@ -128,6 +128,47 @@ type ScoutResponse struct {
 	AcceptorID int
 }
 
+func StartAcceptors(
+	numAcceptors int,
+) (acceptorAddresses []string, acceptors []*Acceptor) {
+	acceptorAddresses = make([]string, numAcceptors)
+	acceptors = make([]*Acceptor, numAcceptors)
+	for i := 0; i < numAcceptors; i++ {
+		acceptor := StartAcceptor(i, "")
+		acceptorAddresses[i] = acceptor.Address
+		acceptors[i] = acceptor
+	}
+	return acceptorAddresses, acceptors
+}
+
+func StartLeaders(
+	numLeaders int,
+	acceptorAddresses []string,
+) (leaderAddresses []string, leaders []*Leader) {
+	leaderAddresses = make([]string, numLeaders)
+	leaders = make([]*Leader, numLeaders)
+	for i := 0; i < numLeaders; i++ {
+		leader := StartLeader(i, acceptorAddresses, "")
+		leaderAddresses[i] = leader.Address
+		leaders[i] = leader
+	}
+	return leaderAddresses, leaders
+}
+
+func StartReplicas(
+	numReplicas int,
+	leaderAddresses []string,
+) (replicaAddresses []string, replicas []*Replica) {
+	replicaAddresses = make([]string, numReplicas)
+	replicas = make([]*Replica, numReplicas)
+	for i := 0; i < numReplicas; i++ {
+		replica := StartReplica(i, leaderAddresses, "")
+		replicaAddresses[i] = replica.Address
+		replicas[i] = replica
+	}
+	return replicaAddresses, replicas
+}
+
 // Call is a wrapper function for creating a connection to a remote
 // server and making an RPC.
 // It is a blocking operation, and the caller should use a goroutine

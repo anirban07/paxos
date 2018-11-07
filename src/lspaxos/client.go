@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -26,6 +27,12 @@ type Client struct {
 
 	// Current time out
 	timeoutMillis int
+
+	// Value to be added to timeout in additive increase
+	timeoutMillisAddInc int
+
+	// Value timeout to be divided by in multiplicative decrease
+	timeoutMillisMultDec int
 }
 
 // Starts a client that issues requests in the order
@@ -98,16 +105,24 @@ func StartClientWithSpec(
 	return nil
 }
 
-func StartClient(ClientID int, Replicas []string) Client {
+func StartClient(
+	ClientID int,
+	Replicas []string,
+	TimeoutMillis int,
+	TimeoutMillisAddInc int,
+	TimeoutMillisMultDec int,
+) Client {
 	return Client{
-		clientID:      ClientID,
-		msgID:         1,
-		replicas:      Replicas,
-		timeoutMillis: 100,
+		clientID:             ClientID,
+		msgID:                1,
+		replicas:             Replicas,
+		timeoutMillis:        TimeoutMillis,
+		timeoutMillisAddInc:  TimeoutMillisAddInc,
+		timeoutMillisMultDec: TimeoutMillisMultDec,
 	}
 }
 
-func (thisClient *Client) Lock(LockName string) Err {
+func (thisClient *Client) TryLock(LockName string) Err {
 	command := Command{
 		LockName: LockName,
 		LockOp:   Lock,
@@ -115,6 +130,16 @@ func (thisClient *Client) Lock(LockName string) Err {
 		ClientID: thisClient.clientID,
 	}
 	return thisClient.sendAndWaitForResponse(command)
+}
+
+func (thisClient *Client) Lock(LockName string) {
+	err := thisClient.TryLock(LockName)
+	for err != OK {
+		time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
+		thisClient.timeoutMillis += thisClient.timeoutMillisAddInc
+		err = thisClient.TryLock(LockName)
+	}
+	thisClient.timeoutMillis /= thisClient.timeoutMillisMultDec
 }
 
 func (thisClient *Client) Unlock(LockName string) Err {
