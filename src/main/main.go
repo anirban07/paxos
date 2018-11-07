@@ -17,17 +17,17 @@ func main() {
 
 	// Start the acceptors
 	for id, addr := range AcceptorAddrs {
-		go lspaxos.StartAcceptor(id, strings.Split(addr, ":")[1])
+		go lspaxos.StartAcceptor(id, ":"+strings.Split(addr, ":")[1])
 	}
 
 	// Start the leaders
 	for id, addr := range LeaderAddrs {
-		go lspaxos.StartLeader(id, AcceptorAddrs, strings.Split(addr, ":")[1])
+		go lspaxos.StartLeader(id, AcceptorAddrs, ":"+strings.Split(addr, ":")[1])
 	}
 
 	// Start the replicas
 	for id, addr := range ReplicaAddrs {
-		go lspaxos.StartReplica(id, LeaderAddrs, strings.Split(addr, ":")[1])
+		go lspaxos.StartReplica(id, LeaderAddrs, ":"+strings.Split(addr, ":")[1])
 	}
 	time.Sleep(1 * time.Second)
 

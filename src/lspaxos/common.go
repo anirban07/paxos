@@ -12,7 +12,7 @@ const (
 	OK                 = "OK"
 	ErrInvalidUnlock   = "Attempting to unlock unheld lock"
 	ErrLockHeld        = "Lock held by someone else"
-	ErrConenctionError = "Connection error"
+	ErrConnectionError = "Connection error"
 )
 
 const (

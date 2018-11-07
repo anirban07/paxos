@@ -110,12 +110,10 @@ func StartAcceptor(AcceptorID int, Address string) (acceptor *Acceptor) {
 
 	go func() {
 		for !acceptor.isDead() {
-			log.Printf("Acceptor %d listening for requests\n", AcceptorID)
 			connection, err := acceptor.listener.Accept()
 			if err == nil {
-				log.Printf("Acceptor accepted request\n")
 				go server.ServeConn(connection)
-			} else {
+			} else if err != nil && !acceptor.isDead() {
 				log.Fatalf("Acceptor %d failed to accept connection, %s\n", AcceptorID, err)
 			}
 		}

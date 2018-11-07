@@ -26,9 +26,6 @@ type Client struct {
 
 	// Current time out
 	timeoutMillis int
-
-	// Response channel for replicas
-	responseChannel chan interface{}
 }
 
 // Starts a client that issues requests in the order
@@ -103,15 +100,14 @@ func StartClientWithSpec(
 
 func StartClient(ClientID int, Replicas []string) Client {
 	return Client{
-		clientID:        ClientID,
-		msgID:           1,
-		replicas:        Replicas,
-		timeoutMillis:   100,
-		responseChannel: make(chan interface{}, len(Replicas)*2),
+		clientID:      ClientID,
+		msgID:         1,
+		replicas:      Replicas,
+		timeoutMillis: 100,
 	}
 }
 
-func (thisClient *Client) Lock(LockName string) Err {
+func (thisClient *Client) Lock(LockName string, errChan chan Err) Err {
 	command := Command{
 		LockName: LockName,
 		LockOp:   Lock,
@@ -133,16 +129,23 @@ func (thisClient *Client) Unlock(LockName string) Err {
 
 func (thisClient *Client) sendAndWaitForResponse(command Command) Err {
 	// Send the command to each replica
+	defer func() { thisClient.msgID++ }()
 	done := make(chan interface{})
+	var responseCount = 0
 	thisClient.SendCommand(command, done)
 	for {
-		response := <-thisClient.responseChannel
+		response := <-done
+		responseCount++
 		if response == false {
-			return ErrConenctionError
+			if responseCount < len(thisClient.replicas) {
+				log.Printf("Client %d connection error\n", thisClient.clientID)
+				continue
+			} else {
+				return ErrConnectionError
+			}
 		}
 		clientResponse := response.(*ClientResponse)
 		if clientResponse.MsgID == thisClient.msgID {
-			log.Println(clientResponse.Err)
 			return clientResponse.Err
 		}
 	}

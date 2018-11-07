@@ -155,11 +155,11 @@ func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientRespons
 						res.Err = ErrLockHeld
 					}
 				case Unlock:
-					if lockIsOwned && lockOwner != req.Command.ClientID {
-						res.Err = ErrInvalidUnlock
-					} else {
-						res.Err = OK
-					}
+					// No way to distinguish between unlocking a lock that was
+					// previously held, but now is held by different owner and
+					// trying to unlock a lock that you never held.
+					// -- May have been notified after future slots were performed
+					res.Err = OK
 				}
 				requestDecided = true
 				break
@@ -184,7 +184,7 @@ func (thisReplica *Replica) isDead() bool {
 
 //StartReplica starts an acceptor instance and returns an Replica struct.
 //The struct can be used to kill this instance.
-func StartReplica(ReplicaID int, Leaders []string, Address string) (replica *Replica) {
+func StartReplica(ReplicaID int, LeaderAddresses []string, Address string) (replica *Replica) {
 	server := rpc.NewServer()
 	listener, err := net.Listen("tcp", Address)
 	if err != nil {
@@ -206,7 +206,7 @@ func StartReplica(ReplicaID int, Leaders []string, Address string) (replica *Rep
 		requests:         make([]Command, 0),
 		proposals:        make(map[int]Command),
 		decisions:        make(map[int]Command),
-		leaders:          Leaders,
+		leaders:          LeaderAddresses,
 		listener:         listener,
 		dead:             0,
 		Address:          listener.Addr().String(),
@@ -215,14 +215,15 @@ func StartReplica(ReplicaID int, Leaders []string, Address string) (replica *Rep
 	replica.somethingPerformed = sync.Cond{L: &replica.mu}
 	server.Register(replica)
 
+	go replica.propose()
+	go replica.perform()
+
 	go func() {
 		for !replica.isDead() {
-			log.Printf("Replica %d listening for requests\n", ReplicaID)
 			connection, err := replica.listener.Accept()
 			if err == nil {
-				log.Printf("Replica accepted request\n")
 				go server.ServeConn(connection)
-			} else {
+			} else if err != nil && !replica.isDead() {
 				log.Fatalf("Replica %d failed to accept connection, %s\n", ReplicaID, err)
 			}
 		}

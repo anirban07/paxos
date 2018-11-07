@@ -1,7 +1,6 @@
 package lspaxos
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -28,12 +27,12 @@ func startAcceptors(
 
 func startLeaders(
 	numLeaders int,
-	acceptors []string,
+	acceptorAddresses []string,
 ) (leaderAddresses []string, leaders []*Leader) {
 	leaderAddresses = make([]string, numLeaders)
 	leaders = make([]*Leader, numLeaders)
 	for i := 0; i < numLeaders; i++ {
-		leader := StartLeader(i, acceptors, "")
+		leader := StartLeader(i, acceptorAddresses, "")
 		leaderAddresses[i] = leader.Address
 		leaders[i] = leader
 	}
@@ -42,12 +41,12 @@ func startLeaders(
 
 func startReplicas(
 	numReplicas int,
-	leaders []string,
+	leaderAddresses []string,
 ) (replicaAddresses []string, replicas []*Replica) {
 	replicaAddresses = make([]string, numReplicas)
 	replicas = make([]*Replica, numReplicas)
 	for i := 0; i < numReplicas; i++ {
-		replica := StartReplica(i, leaders, "")
+		replica := StartReplica(i, leaderAddresses, "")
 		replicaAddresses[i] = replica.Address
 		replicas[i] = replica
 	}
@@ -62,19 +61,25 @@ func failOnError(t *testing.T, err Err, format string, args ...interface{}) {
 
 func cleanup(acceptors []*Acceptor, leaders []*Leader, replicas []*Replica) {
 	for _, acceptor := range acceptors {
-		acceptor.kill()
+		if !acceptor.isDead() {
+			acceptor.kill()
+		}
 	}
 	for _, leader := range leaders {
-		leader.kill()
+		if !leader.isDead() {
+			leader.kill()
+		}
 	}
+
 	for _, replica := range replicas {
-		replica.kill()
+		if !replica.isDead() {
+			replica.kill()
+		}
 	}
 }
 
 func TestKillAcceptor(t *testing.T) {
 	_, acceptors := startAcceptors(1)
-	// time.Sleep(1 * time.Second)
 	if acceptors[0].isDead() {
 		t.Errorf("Acceptor is dead, expected to be alive\n")
 	}
@@ -131,26 +136,266 @@ func TestKillReplicas(t *testing.T) {
 	}
 }
 
-func TestBasic(t *testing.T) {
+func Test1c1r1l3a(t *testing.T) {
 	numReplicas := 1
 	numLeaders := 1
 	numAcceptors := 3
 
 	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
 	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
 	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
-
-	time.Sleep(2 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	lockA := "A"
 	lockB := "B"
 	client0 := StartClient(0, replicaAddresses)
 	err := client0.Lock(lockA)
 	failOnError(t, err, "")
-	t.Logf("Grabbed lockA\n")
 	err = client0.Lock(lockB)
 	failOnError(t, err, "")
-	time.Sleep(5 * time.Second)
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
 	cleanup(acceptors, leaders, replicas)
-	fmt.Printf("  ... Passed\n")
+}
+
+func Test1c1r3l3a(t *testing.T) {
+	numReplicas := 1
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r1l3a(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 1
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r3l3a(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r3l3aFailingReplicas(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	replicas[0].kill()
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	replicas[2].kill()
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r3l3aFailingLeaders(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	leaders[1].kill()
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	leaders[2].kill()
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r3l3aFailingAcceptors(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	acceptors[1].kill()
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test1c3r3l3aFailingAll(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	leaders[1].kill()
+	replicas[0].kill()
+	err = client0.Lock(lockB)
+	failOnError(t, err, "")
+	acceptors[0].kill()
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	leaders[2].kill()
+	replicas[2].kill()
+	err = client0.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test2c1r1l3aIndependentLocks(t *testing.T) {
+	numReplicas := 1
+	numLeaders := 1
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+	client1 := StartClient(1, replicaAddresses)
+
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client1.Lock(lockB)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client1.Unlock(lockB)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
+func Test2c1r1l3aContendingLocks(t *testing.T) {
+	numReplicas := 1
+	numLeaders := 1
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	client0 := StartClient(0, replicaAddresses)
+	client1 := StartClient(1, replicaAddresses)
+
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client1.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	err = client1.Unlock(lockA)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+
 }

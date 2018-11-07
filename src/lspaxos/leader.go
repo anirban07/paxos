@@ -64,12 +64,9 @@ type Leader struct {
 
 func (thisLeader *Leader) scout() {
 	for {
-		log.Printf("Leader %d scout trying to grab lock\n", thisLeader.leaderID)
 		thisLeader.mu.Lock()
 		for thisLeader.active {
-			log.Printf("Leader %d is the leader, scout waiting...", thisLeader.leaderID)
 			thisLeader.needToScout.Wait()
-			log.Printf("Leader %d scout got woken up\n", thisLeader.leaderID)
 		}
 
 		for !thisLeader.active {
@@ -102,7 +99,6 @@ func (thisLeader *Leader) scout() {
 				}
 
 				var res = response.(*ScoutResponse)
-				log.Printf("Leader %d got a scout response from acceptor %+v\n", thisLeader.leaderID, res)
 				var compareResult = thisLeader.ballot.Compare(res.Ballot)
 				if compareResult < 0 {
 					// We're pre-empted by somebody else, exit the loop
@@ -251,7 +247,7 @@ func (thisLeader *Leader) isDead() bool {
 
 //StartLeader starts an acceptor instance and returns an Leader struct.
 //The struct can be used to kill this instance.
-func StartLeader(LeaderID int, Acceptors []string, Address string) (leader *Leader) {
+func StartLeader(LeaderID int, AcceptorAddresses []string, Address string) (leader *Leader) {
 	server := rpc.NewServer()
 	listener, err := net.Listen("tcp", Address)
 	if err != nil {
@@ -267,9 +263,9 @@ func StartLeader(LeaderID int, Acceptors []string, Address string) (leader *Lead
 		mu:           sync.Mutex{},
 		leaderID:     LeaderID,
 		ballot:       Ballot{Number: 0, Leader: LeaderID},
-		acceptors:    Acceptors,
+		acceptors:    AcceptorAddresses,
 		active:       false,
-		majority:     (len(Acceptors)+1)/2 + (len(Acceptors)+1)%2,
+		majority:     (len(AcceptorAddresses)+1)/2 + (len(AcceptorAddresses)+1)%2,
 		timeout:      leaderInitialTimeout,
 		scoutChannel: make(chan interface{}, ChannelBufferSize),
 		proposals:    make(map[int]Command),
@@ -282,14 +278,14 @@ func StartLeader(LeaderID int, Acceptors []string, Address string) (leader *Lead
 	leader.somethingDecided = sync.Cond{L: &leader.mu}
 	server.Register(leader)
 
+	go leader.scout()
+
 	go func() {
 		for !leader.isDead() {
-			log.Printf("Leader %d listening for requests\n", LeaderID)
 			connection, err := leader.listener.Accept()
 			if err == nil {
-				log.Printf("Leader accepted request\n")
 				go server.ServeConn(connection)
-			} else {
+			} else if err != nil && !leader.isDead() {
 				log.Fatalf("Leader %d failed to accept connection, %s\n", LeaderID, err)
 			}
 		}
