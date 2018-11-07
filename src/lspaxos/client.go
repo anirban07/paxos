@@ -107,7 +107,7 @@ func StartClient(ClientID int, Replicas []string) Client {
 	}
 }
 
-func (thisClient *Client) Lock(LockName string, errChan chan Err) Err {
+func (thisClient *Client) Lock(LockName string) Err {
 	command := Command{
 		LockName: LockName,
 		LockOp:   Lock,
@@ -125,6 +125,26 @@ func (thisClient *Client) Unlock(LockName string) Err {
 		ClientID: thisClient.clientID,
 	}
 	return thisClient.sendAndWaitForResponse(command)
+}
+
+func (thisClient *Client) ChanneledLock(LockName string, errChan chan Err) {
+	command := Command{
+		LockName: LockName,
+		LockOp:   Lock,
+		MsgID:    thisClient.msgID,
+		ClientID: thisClient.clientID,
+	}
+	errChan <- thisClient.sendAndWaitForResponse(command)
+}
+
+func (thisClient *Client) ChanneledUnlock(LockName string, errChan chan Err) {
+	command := Command{
+		LockName: LockName,
+		LockOp:   Unlock,
+		MsgID:    thisClient.msgID,
+		ClientID: thisClient.clientID,
+	}
+	errChan <- thisClient.sendAndWaitForResponse(command)
 }
 
 func (thisClient *Client) sendAndWaitForResponse(command Command) Err {

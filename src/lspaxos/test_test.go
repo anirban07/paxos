@@ -388,14 +388,85 @@ func Test2c1r1l3aContendingLocks(t *testing.T) {
 	client0 := StartClient(0, replicaAddresses)
 	client1 := StartClient(1, replicaAddresses)
 
-	err := client0.Lock(lockA)
+	client0Channel := make(chan Err, 100)
+	client1Channel := make(chan Err, 100)
+
+	client0.ChanneledLock(lockA, client0Channel)
+	// Let client0 grab the lock
+	err := <-client0Channel
 	failOnError(t, err, "")
-	err = client1.Lock(lockA)
+
+	done := make(chan bool, 5)
+	go func() {
+		var err Err = ErrLockHeld
+		sleepTimeMillis := 100
+		sleepTimeIncrement := 10
+		for ; err == ErrLockHeld; err = <-client1Channel {
+			time.Sleep(time.Duration(sleepTimeMillis) * time.Millisecond)
+			sleepTimeMillis += sleepTimeIncrement
+			go client1.ChanneledLock(lockA, client1Channel)
+		}
+		done <- true
+	}()
+	// This will cause a few ErrLockHeld
+	time.Sleep(1 * time.Second)
+
+	go client0.ChanneledUnlock(lockA, client0Channel)
+
+	// Wait for client1 to grab the lock
+	<-done
+	client1.ChanneledUnlock(lockA, client1Channel)
+	cleanup(acceptors, leaders, replicas)
+
+}
+
+func Test2c1r1l3aContendingLocksFailingAll(t *testing.T) {
+	numReplicas := 3
+	numLeaders := 3
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	client0 := StartClient(0, replicaAddresses)
+	client1 := StartClient(1, replicaAddresses)
+
+	client0Channel := make(chan Err, 100)
+	client1Channel := make(chan Err, 100)
+
+	client0.ChanneledLock(lockA, client0Channel)
+	// Let client0 grab the lock
+	err := <-client0Channel
 	failOnError(t, err, "")
-	err = client0.Unlock(lockA)
-	failOnError(t, err, "")
-	err = client1.Unlock(lockA)
-	failOnError(t, err, "")
+	replicas[0].kill()
+	leaders[2].kill()
+
+	done := make(chan bool, 5)
+	go func() {
+		var err Err = ErrLockHeld
+		sleepTimeMillis := 100
+		sleepTimeIncrement := 10
+		for ; err == ErrLockHeld; err = <-client1Channel {
+			time.Sleep(time.Duration(sleepTimeMillis) * time.Millisecond)
+			sleepTimeMillis += sleepTimeIncrement
+			go client1.ChanneledLock(lockA, client1Channel)
+		}
+		done <- true
+	}()
+	// This will cause a few ErrLockHeld
+	time.Sleep(1 * time.Second)
+
+	leaders[1].kill()
+	go client0.ChanneledUnlock(lockA, client0Channel)
+	acceptors[1].kill()
+	// Wait for client1 to grab the lock
+	<-done
+	replicas[2].kill()
+	client1.ChanneledUnlock(lockA, client1Channel)
 	cleanup(acceptors, leaders, replicas)
 
 }
