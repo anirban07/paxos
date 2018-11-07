@@ -1,6 +1,7 @@
 package lspaxos
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/rpc"
@@ -144,27 +145,37 @@ func (thisReplica *Replica) ExecuteRequest(req ClientRequest, res *ClientRespons
 	for !requestDecided {
 		thisReplica.mu.Lock()
 		thisReplica.somethingPerformed.Wait()
-		for slot, decidedCommand := range thisReplica.decisions {
-			if req.Command.Equals(decidedCommand) && slot < thisReplica.slotOut {
-				lockOwner, lockIsOwned := thisReplica.lockMap[req.Command.LockName]
-				switch req.Command.LockOp {
-				case Lock:
-					if lockIsOwned && lockOwner == req.Command.ClientID {
-						res.Err = OK
-					} else {
-						res.Err = ErrLockHeld
-					}
-				case Unlock:
-					// No way to distinguish between unlocking a lock that was
-					// previously held, but now is held by different owner and
-					// trying to unlock a lock that you never held.
-					// -- May have been notified after future slots were performed
-					res.Err = OK
+		localLockMap := make(map[string]int)
+		var logState = fmt.Sprintf("Replica %d state:", thisReplica.replicaID)
+		for slot := 0; slot < thisReplica.slotOut; slot++ {
+			decidedCommand := thisReplica.decisions[slot]
+			var result Err = ErrConnectionError
+			lockOwner, lockIsOwned := localLockMap[decidedCommand.LockName]
+			switch decidedCommand.LockOp {
+			case Lock:
+				if !lockIsOwned || lockOwner == decidedCommand.ClientID {
+					localLockMap[decidedCommand.LockName] = decidedCommand.ClientID
+					result = OK
+					logState += fmt.Sprintf(" (%d %+v)", slot, decidedCommand)
+				} else {
+					result = ErrLockHeld
 				}
+			case Unlock:
+				if !lockIsOwned || lockOwner != decidedCommand.ClientID {
+					result = ErrInvalidUnlock
+				} else {
+					delete(localLockMap, decidedCommand.LockName)
+					result = OK
+					logState += fmt.Sprintf(" (%d %+v)", slot, decidedCommand)
+				}
+			}
+			if decidedCommand.Equals(req.Command) {
 				requestDecided = true
+				res.Err = result
 				break
 			}
 		}
+		log.Printf(logState)
 		thisReplica.mu.Unlock()
 	}
 	return nil

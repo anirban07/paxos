@@ -3,6 +3,7 @@ package main
 import (
 	"lspaxos"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,11 +32,18 @@ func main() {
 	}
 	time.Sleep(1 * time.Second)
 
+	var wg sync.WaitGroup
 	Spec := lspaxos.ReadSpec("src/specs/test_spec.txt")
-	go lspaxos.StartClientWithSpec(666, ReplicaAddrs, Spec)
-	go lspaxos.StartClientWithSpec(777, ReplicaAddrs, Spec)
+	wg.Add(2)
+	go func() {
+		lspaxos.StartClientWithSpec(666, ReplicaAddrs, Spec)
+		wg.Done()
+	}()
 
-	for {
-		time.Sleep(1 * time.Second)
-	}
+	go func() {
+		lspaxos.StartClientWithSpec(777, ReplicaAddrs, Spec)
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
