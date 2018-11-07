@@ -55,6 +55,7 @@ func startReplicas(
 
 func failOnError(t *testing.T, err Err, format string, args ...interface{}) {
 	if err != OK {
+		t.Errorf(string(err))
 		t.Errorf(format, args)
 	}
 }
@@ -346,6 +347,33 @@ func Test1c3r3l3aFailingAll(t *testing.T) {
 	cleanup(acceptors, leaders, replicas)
 }
 
+func Test1c1r1l3aInvalidLockRequest(t *testing.T) {
+	numReplicas := 1
+	numLeaders := 1
+	numAcceptors := 3
+
+	acceptorAddresses, acceptors := startAcceptors(numAcceptors)
+	time.Sleep(500 * time.Millisecond)
+	leaderAddresses, leaders := startLeaders(numLeaders, acceptorAddresses)
+	replicaAddresses, replicas := startReplicas(numReplicas, leaderAddresses)
+	time.Sleep(500 * time.Millisecond)
+
+	lockA := "A"
+	lockB := "B"
+	client0 := StartClient(0, replicaAddresses)
+
+	err := client0.Lock(lockA)
+	failOnError(t, err, "")
+	err = client0.Unlock(lockB)
+	if err != ErrInvalidUnlock {
+		t.Fatalf("Should have been invalid unlock, %s\n", err)
+	}
+
+	err = client0.Unlock(lockA)
+	failOnError(t, err, "")
+	cleanup(acceptors, leaders, replicas)
+}
+
 func Test2c1r1l3aIndependentLocks(t *testing.T) {
 	numReplicas := 1
 	numLeaders := 1
@@ -468,5 +496,4 @@ func Test2c1r1l3aContendingLocksFailingAll(t *testing.T) {
 	replicas[2].kill()
 	client1.ChanneledUnlock(lockA, client1Channel)
 	cleanup(acceptors, leaders, replicas)
-
 }
