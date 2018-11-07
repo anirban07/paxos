@@ -80,8 +80,8 @@ func StartClientWithSpec(
 				// Have to increment the message id to deal with stale responses
 				log.Printf("Client %d requested a held lock\n", thisClient.clientID)
 				thisClient.timeoutMillis += additiveIncrease
-				//time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
-				//log.Printf("Client %d woke up\n", thisClient.clientID)
+				time.Sleep(time.Duration(thisClient.timeoutMillis) * time.Millisecond)
+				log.Printf("Client %d woke up\n", thisClient.clientID)
 				thisClient.msgID++
 				command.MsgID = thisClient.msgID
 				thisClient.SendCommand(command, done)
